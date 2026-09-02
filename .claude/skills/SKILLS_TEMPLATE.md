@@ -1,16 +1,16 @@
 ---
 name: skill-name
-description: One-line description of what this skill does
-type: dynamic  # or cron, or other types as needed
+description: One-line description of what this does and when to use it — put the key trigger phrase first, since Claude matches against this text.
+# disable-model-invocation: true   # uncomment if only YOU should invoke this (e.g. /deploy)
+# allowed-tools: Bash(npm run *)   # uncomment to pre-approve specific tools for this skill's turn
+metadata:
+  type: dynamic
 ---
 
 # Skill Name
 
 ## Purpose
 Clear description of what this skill accomplishes and when to use it.
-
-## Trigger
-When/how this skill is invoked (e.g., `/skill-name`, automatically on certain conditions, etc.)
 
 ## Steps
 1. Step one

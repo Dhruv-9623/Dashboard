@@ -162,7 +162,44 @@ Migrations are handled automatically by Spring Boot on startup. Check `src/main/
 mvn spring-boot:run
 ```
 
-The application will be available at `http://localhost:8080`
+The backend API will be available at `http://localhost:8080`
+
+#### 7. Start the Frontend (in a separate terminal)
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The frontend will be available at `http://localhost:3000`
+
+---
+
+## Frontend Development
+
+The frontend is a React + TypeScript application built with Vite. For detailed setup and development instructions, see [frontend/README.md](frontend/README.md).
+
+### Quick Start
+```bash
+# Terminal 1: Start backend
+docker-compose up -d  # Start infrastructure
+mvn spring-boot:run
+
+# Terminal 2: Start frontend
+cd frontend
+npm install
+npm run dev
+```
+
+Visit `http://localhost:3000` to access the application.
+
+### Frontend & Backend Together
+
+The frontend and backend are built hand-in-hand. Every new feature includes:
+1. Backend: controller + DTOs in `api/{feature}/`
+2. Frontend: API layer + screen in `src/features/{name}/`
+
+This ensures both sides are always in sync and tested together before merge.
 
 ---
 

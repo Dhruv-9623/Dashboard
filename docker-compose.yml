@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: dashboard_dev
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Kafka is disabled for now — no producers/consumers exist in the codebase yet.
+  # The Bitnami image this used to reference (bitnami/kafka:3.6-debian-11) was
+  # deprecated and removed from Docker Hub's free tier. Re-enable when a feature
+  # actually needs messaging (e.g. async AI suggestions), using a maintained
+  # image such as apache/kafka at that point.
+  # kafka:
+  #   image: apache/kafka:3.7.0
+  #   ports:
+  #     - "9092:9092"
+  #   volumes:
+  #     - kafka_data:/bitnami/kafka/data
+
+volumes:
+  postgres_data:
+  redis_data:
+  kafka_data:

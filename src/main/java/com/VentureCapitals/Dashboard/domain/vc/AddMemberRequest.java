@@ -1,0 +1,21 @@
+package com.VentureCapitals.Dashboard.domain.vc;
+
+import jakarta.validation.constraints.NotNull;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.UUID;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class AddMemberRequest {
+    @NotNull(message = "User ID is required")
+    private UUID userId;
+
+    @NotNull(message = "Role is required")
+    private VCRole role;
+}
