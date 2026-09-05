@@ -75,7 +75,8 @@ public class SecurityConfig {
     @Bean
     public DelegatingSecurityContextRepository securityContextRepository() {
         return new DelegatingSecurityContextRepository(
-                new RequestAttributeSecurityContextRepository()
+                new RequestAttributeSecurityContextRepository(),
+                new HttpSessionSecurityContextRepository()
         );
     }
 
