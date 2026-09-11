@@ -30,4 +30,6 @@ export const authApi = {
   loginWithLinkedin: () => {
     window.location.href = `${API_BASE}/oauth2/authorization/linkedin`
   },
+
+  logout: () => fetchApi<void>('/api/auth/logout', { method: 'POST' }),
 }

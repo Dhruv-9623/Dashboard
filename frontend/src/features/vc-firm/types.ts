@@ -4,6 +4,23 @@ export enum VCRole {
   STAFF = 'STAFF',
 }
 
+export enum PlanTier {
+  FREE = 'FREE',
+  STARTER = 'STARTER',
+  GROWTH = 'GROWTH',
+}
+
+/** The firm's investment thesis — what Deal Triage scores opportunities against. */
+export interface ThesisDTO {
+  sectors: string[]
+  stages: string[]
+  chequeSizeMin: number | null
+  chequeSizeMax: number | null
+  currency: string
+  notes: string | null
+  updatedAt: string
+}
+
 export interface VCFirmDTO {
   id: string
   name: string
@@ -14,8 +31,19 @@ export interface VCFirmDTO {
   sectors?: string[]
   location?: string
   foundedYear?: number
+  planTier: PlanTier
+  thesis: ThesisDTO | null
   createdAt: string
   updatedAt: string
+}
+
+export interface UpdateThesisRequest {
+  sectors: string[]
+  stages: string[]
+  chequeSizeMin: number | null
+  chequeSizeMax: number | null
+  currency: string
+  notes?: string
 }
 
 export interface VCMemberDTO {

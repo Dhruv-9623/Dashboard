@@ -31,3 +31,11 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### macOS ###
+.DS_Store
+
+### Node (root-level tooling, e.g. MCP servers) ###
+node_modules/
+package.json
+package-lock.json

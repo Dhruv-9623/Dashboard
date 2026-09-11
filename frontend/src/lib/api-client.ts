@@ -1,6 +1,6 @@
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080'
 
-export interface ApiResponse<T> {
+interface ApiResponse<T> {
   success: boolean
   data?: T
   errorCode?: string
@@ -8,7 +8,7 @@ export interface ApiResponse<T> {
   timestamp?: string
 }
 
-export enum ErrorCode {
+enum ErrorCode {
   VALIDATION_ERROR = 'VALIDATION_ERROR',
   ENTITY_NOT_FOUND = 'ENTITY_NOT_FOUND',
   UNAUTHORIZED = 'UNAUTHORIZED',
@@ -30,31 +30,29 @@ class ApiError extends Error {
   }
 }
 
-async function fetchApi<T>(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<T> {
-  const url = `${API_BASE}${endpoint}`
-  const response = await fetch(url, {
-    ...options,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  })
+async function readEnvelope<T>(response: Response): Promise<T> {
+  // 204s and empty bodies are valid for DELETE-style endpoints.
+  const raw = await response.text()
 
-  const data: ApiResponse<T> = await response.json()
+  if (!raw) {
+    if (!response.ok) {
+      throw new ApiError(ErrorCode.INTERNAL_ERROR, `HTTP ${response.status}`, response.status)
+    }
+    return undefined as T
+  }
 
-  if (!data.success) {
+  let data: ApiResponse<T>
+  try {
+    data = JSON.parse(raw)
+  } catch {
     throw new ApiError(
-      data.errorCode || ErrorCode.INTERNAL_ERROR,
-      data.message || 'An error occurred',
+      ErrorCode.INTERNAL_ERROR,
+      response.ok ? 'Malformed response from server' : `HTTP ${response.status}`,
       response.status
     )
   }
 
-  if (!response.ok) {
+  if (!data.success || !response.ok) {
     throw new ApiError(
       data.errorCode || ErrorCode.INTERNAL_ERROR,
       data.message || `HTTP ${response.status}`,
@@ -65,4 +63,34 @@ async function fetchApi<T>(
   return data.data as T
 }
 
-export { fetchApi, ApiError, API_BASE }
+async function fetchApi<T>(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    ...options,
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  })
+
+  return readEnvelope<T>(response)
+}
+
+async function uploadApi<T>(endpoint: string, file: File, fieldName = 'file'): Promise<T> {
+  const body = new FormData()
+  body.append(fieldName, file)
+
+  // No Content-Type header — the browser sets the multipart boundary.
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    method: 'POST',
+    credentials: 'include',
+    body,
+  })
+
+  return readEnvelope<T>(response)
+}
+
+export { fetchApi, uploadApi, ApiError, API_BASE }

@@ -11,6 +11,3 @@ export interface UserDTO {
   accountSetupComplete: boolean
 }
 
-export interface AccountTypeSelectionRequest {
-  userType: UserType
-}
