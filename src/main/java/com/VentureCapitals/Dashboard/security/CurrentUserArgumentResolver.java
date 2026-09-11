@@ -40,8 +40,23 @@ public class CurrentUserArgumentResolver implements HandlerMethodArgumentResolve
         log.debug("CurrentUserArgumentResolver: authentication={}", authentication);
         if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedUserPrincipal) {
             AuthenticatedUserPrincipal principal = (AuthenticatedUserPrincipal) authentication.getPrincipal();
-            log.debug("CurrentUserArgumentResolver: Found OAuth2 principal: {}", principal.getUser().getEmail());
-            return principal.getUser();
+
+            // After deserialization from session, the User field may be null (transient)
+            // In that case, load it from the userId
+            User user = principal.getUser();
+            if (user == null && principal.getUserId() != null) {
+                try {
+                    user = userRepository.findById(UUID.fromString(principal.getUserId())).orElse(null);
+                    log.debug("CurrentUserArgumentResolver: Loaded user from DB using userId: {}",
+                        user != null ? user.getEmail() : "null");
+                    return user;
+                } catch (Exception e) {
+                    log.debug("CurrentUserArgumentResolver: Error loading user from userId: {}", e.getMessage());
+                }
+            } else if (user != null) {
+                log.debug("CurrentUserArgumentResolver: Found principal with user: {}", user.getEmail());
+                return user;
+            }
         }
 
         // Second, try to get user ID from session (email/password login flow)
