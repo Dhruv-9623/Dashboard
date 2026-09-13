@@ -19,7 +19,10 @@ const readUserType = () => {
 
 let userType = readUserType()
 
-const uid = (prefix: string) => `${prefix}-${Math.random().toString(36).slice(2, 9)}`
+const uid = (prefix: string) => {
+  const random = window.crypto.getRandomValues(new Uint32Array(1))[0]
+  return `${prefix}-${random.toString(36).padStart(7, '0').slice(0, 7)}`
+}
 const now = () => new Date().toISOString()
 
 type Ctx = { url: URL; body: any; params: string[] }
