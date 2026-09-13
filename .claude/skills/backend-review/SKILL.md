@@ -24,9 +24,9 @@ A comprehensive report on the current status of the project, including:
 - Recently completed work and its impact on the project
 - Any errors or issues encountered and their resolution status
 - Overall alignment with the main product goals and objectives
-- Show a one short paragraph also at the end summarizing everything in this report.
 
 ## Notes
 - This skill is intended to provide a snapshot of the project's current state and progress, helping stakeholders understand where the project stands and what actions may be needed to keep it on track.
 - Nothing write, update, modification, or delete any code or files in the project. Only provide a report on the current status of the project.
 - No edit should be done anywhere in this, this is just a read and report skill.
+- Keep in mind also Cloud Integrations and Pipeline support code. 
