@@ -13,17 +13,20 @@ Optimisation of code, security measures and no code leakage along side no other 
 When the user requests a comprehensive review of the backend codebase, including architecture, design patterns, and best practices.
 
 ## Steps
-1. First, check the current branch of the project and list the work that is currently in progress, including any tasks or features being developed.
-2. Next, review the recent commits and pull requests to identify completed work and any issues that have been addressed. Check how much this is near to the main product which we are building at the end.
-3. Check if there are any errors or blockers that have been encountered during development, and how they have been resolved or are being handled
-4. Finally, compile a summary of the project's health, including any risks or blockers that need attention.
-
+1. Analyze the overall architecture of the backend codebase, including the structure of modules, components, and services. Identify any potential issues or areas for improvement in terms of scalability, maintainability, and performance.
+2. Review the design patterns used in the backend codebase, ensuring that they are appropriate for the specific use cases and follow best practices. Identify any areas where design patterns could be improved or refactored for better maintainability and readability.
+3. Evaluate the implementation of data structures and algorithms in the backend codebase, ensuring that they are efficient and appropriate for the specific use cases. Identify any areas where data structures or algorithms could be optimized for better performance or memory usage.
+4. Assess the security measures implemented in the backend codebase, including authentication, authorization, and data protection. Identify any potential security vulnerabilities or areas for improvement in terms of security best practices.
+5. Cloud integrations and pipeline support code should be reviewed to ensure that they are properly implemented and follow best practices. Identify any areas where cloud integrations or pipeline support code could be improved for better maintainability, scalability, and performance.
+6. Review the error handling, logging, and monitoring practices in the backend codebase, ensuring that they are robust and reliable. Identify any areas where error handling, logging, or monitoring could be improved for better maintainability and reliability.
 ## Output
-A comprehensive report on the current status of the project, including:
-- Current work in progress and its status
-- Recently completed work and its impact on the project
-- Any errors or issues encountered and their resolution status
-- Overall alignment with the main product goals and objectives
+A comprehensive report on the backend codebase, including:
+- Overall architecture and structure of the backend codebase, including any potential issues or areas for improvement
+- Design patterns used in the backend codebase, including any areas for improvement or refactoring
+- Implementation of data structures and algorithms, including any areas for optimization or improvement
+- Security measures implemented in the backend codebase, including any potential vulnerabilities or areas for improvement
+- Error handling, logging, and monitoring practices, including any areas for improvement or optimization
+- Cloud integrations and pipeline support code, including any areas for improvement or optimization
 
 ## Notes
 - This skill is intended to provide a snapshot of the project's current state and progress, helping stakeholders understand where the project stands and what actions may be needed to keep it on track.
