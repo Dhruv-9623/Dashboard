@@ -10,7 +10,9 @@ import jakarta.servlet.http.HttpSession;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -27,33 +29,58 @@ public class SessionUserAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        // Don't load from session if already authenticated from a previous stage (OAuth2, etc)
         Authentication existingAuth = SecurityContextHolder.getContext().getAuthentication();
-        if (existingAuth == null || existingAuth.getPrincipal() instanceof String) {
+        if (existingAuth instanceof OAuth2AuthenticationToken oauthToken
+                && oauthToken.getPrincipal() instanceof AuthenticatedUserPrincipal principal) {
+            refreshOAuthSession(oauthToken, principal);
+        } else {
             try {
                 HttpSession session = request.getSession(false);
-                if (session != null) {
-                    String userId = (String) session.getAttribute("userId");
-                    if (userId != null) {
-                        try {
-                            User user = userRepository.findById(UUID.fromString(userId)).orElse(null);
-                            if (user != null) {
-                                AuthenticatedUserPrincipal principal = new AuthenticatedUserPrincipal(user, java.util.Map.of());
-                                UsernamePasswordAuthenticationToken authentication =
-                                    new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
-                                SecurityContextHolder.getContext().setAuthentication(authentication);
-                                log.debug("SessionUserAuthenticationFilter: Loaded and set authentication for user {} from session", user.getEmail());
-                            }
-                        } catch (Exception e) {
-                            log.debug("SessionUserAuthenticationFilter: Failed to load user from userId {}: {}", userId, e.getMessage());
-                        }
+                String userId = session != null ? (String) session.getAttribute("userId") : null;
+                if (userId != null) {
+                    // Rebuild from the database on every request rather than trusting a context that
+                    // SessionManagementFilter may have saved earlier: roles change when the user picks an
+                    // account type, and deactivated accounts must lose access even with a live session.
+                    User user = userRepository.findById(UUID.fromString(userId)).orElse(null);
+                    // Update the context in place: the chain holds a deferred reference to it.
+                    SecurityContext context = SecurityContextHolder.getContext();
+                    if (user != null && user.isActive()) {
+                        AuthenticatedUserPrincipal principal = new AuthenticatedUserPrincipal(user, java.util.Map.of());
+                        context.setAuthentication(
+                                new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities()));
+                        log.debug("SessionUserAuthenticationFilter: Loaded authentication for user {} from session", user.getId());
+                    } else {
+                        context.setAuthentication(null);
                     }
                 }
             } catch (Exception e) {
-                log.debug("SessionUserAuthenticationFilter: Error accessing session: {}", e.getMessage());
+                log.debug("SessionUserAuthenticationFilter: Failed to load user from session: {}", e.getMessage());
             }
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    /**
+     * OAuth sessions keep the provider token, but the account behind it can change: it may be
+     * deactivated (drop access) or pick an account type (refresh roles).
+     */
+    private void refreshOAuthSession(OAuth2AuthenticationToken token, AuthenticatedUserPrincipal principal) {
+        try {
+            User user = userRepository.findById(UUID.fromString(principal.getUserId())).orElse(null);
+            SecurityContext context = SecurityContextHolder.getContext();
+            if (user == null || !user.isActive()) {
+                context.setAuthentication(null);
+                return;
+            }
+            String currentType = user.getUserType() != null ? user.getUserType().toString() : null;
+            if (!java.util.Objects.equals(currentType, principal.getUserTypeStr())) {
+                AuthenticatedUserPrincipal refreshed = principal.withUser(user);
+                context.setAuthentication(new OAuth2AuthenticationToken(
+                        refreshed, refreshed.getAuthorities(), token.getAuthorizedClientRegistrationId()));
+            }
+        } catch (Exception e) {
+            log.debug("SessionUserAuthenticationFilter: Failed to refresh OAuth session: {}", e.getMessage());
+        }
     }
 }

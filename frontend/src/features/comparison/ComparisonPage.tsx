@@ -6,7 +6,7 @@ import { Avatar } from '@/components/Avatar'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { Card } from '@/components/ui/Card'
-import { Button } from '@/components/ui/Button'
+import { buttonClass } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { ScaleIcon } from '@/components/icons'
@@ -14,7 +14,7 @@ import { formatMoney, stageLabel } from '@/lib/constants'
 
 const rows = [
   { label: 'Sector', get: (r: ComparisonValue) => r.sector },
-  { label: 'Stage', get: (r: ComparisonValue) => r.stage },
+  { label: 'Stage', get: (r: ComparisonValue) => (r.stage ? stageLabel(r.stage) : null) },
   { label: 'Location', get: (r: ComparisonValue) => r.location },
   { label: 'Founded', get: (r: ComparisonValue) => r.founded },
   { label: 'Team size', get: (r: ComparisonValue) => r.teamSize },
@@ -55,8 +55,8 @@ export const ComparisonPage = () => {
           title="Nothing selected"
           description="Pick two or more startups in Discover, then hit Compare."
           action={
-            <Link to="/discover">
-              <Button>Go to Discover</Button>
+            <Link to="/discover" className={buttonClass()}>
+              Go to Discover
             </Link>
           }
         />
@@ -87,8 +87,8 @@ export const ComparisonPage = () => {
         title="Compare startups"
         description={`Side-by-side view of ${results.length} companies.`}
         actions={
-          <Link to="/discover">
-            <Button variant="outline">Change selection</Button>
+          <Link to="/discover" className={buttonClass({ variant: 'outline' })}>
+            Change selection
           </Link>
         }
       />
@@ -97,8 +97,8 @@ export const ComparisonPage = () => {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-200 bg-gray-50">
-                <th className="w-40 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <tr className="border-b border-line bg-surface-sunken">
+                <th className="w-40 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-ink-muted">
                   Metric
                 </th>
                 {results.map((row) => (
@@ -112,7 +112,7 @@ export const ComparisonPage = () => {
                       <div className="min-w-0">
                         <Link
                           to={`/startups/${row.startup.id}`}
-                          className="block truncate font-semibold text-gray-900 hover:text-blue-700 hover:underline"
+                          className="block truncate font-semibold text-ink hover:text-brand-ink hover:underline"
                         >
                           {row.startup.name}
                         </Link>
@@ -123,12 +123,12 @@ export const ComparisonPage = () => {
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className="divide-y divide-line">
               {rows.map((row) => (
                 <tr key={row.label}>
-                  <td className="px-4 py-3 font-medium text-gray-500">{row.label}</td>
+                  <td className="px-4 py-3 font-medium text-ink-muted">{row.label}</td>
                   {results.map((result) => (
-                    <td key={result.startup.id} className="px-4 py-3 text-gray-900">
+                    <td key={result.startup.id} className="px-4 py-3 text-ink">
                       {row.get(valueFor(result))}
                     </td>
                   ))}

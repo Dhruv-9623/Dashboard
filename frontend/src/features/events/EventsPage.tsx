@@ -17,7 +17,7 @@ import { Alert } from '@/components/ui/Alert'
 import { Tabs } from '@/components/ui/Tabs'
 import { SkeletonRows } from '@/components/ui/Skeleton'
 import { CalendarIcon, PlusIcon, UsersIcon } from '@/components/icons'
-import { cn } from '@/lib/utils'
+import { cn, safeUrl } from '@/lib/utils'
 import { formatDateTime } from '@/lib/constants'
 
 const typeOptions = Object.values(EventType).map((type) => ({
@@ -166,12 +166,12 @@ const CreateEventModal = ({ onClose }: { onClose: () => void }) => {
           />
         </div>
 
-        <label className="flex items-center gap-2 text-sm text-gray-700">
+        <label className="flex items-center gap-2 text-sm text-ink-secondary">
           <input
             type="checkbox"
             checked={form.isPublic}
             onChange={(event) => set('isPublic', event.target.checked)}
-            className="h-4 w-4 rounded border-gray-300"
+            className="h-4 w-4 rounded border-line-strong"
           />
           Visible to everyone on the platform
         </label>
@@ -246,21 +246,21 @@ export const EventsPage = () => {
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="secondary">{eventTypeLabels[event.eventType]}</Badge>
                   {!event.isPublic && <Badge variant="warning">Private</Badge>}
-                  <span className="ml-auto inline-flex items-center gap-1 text-xs text-gray-500">
+                  <span className="ml-auto inline-flex items-center gap-1 text-xs text-ink-muted">
                     <UsersIcon className="h-3.5 w-3.5" />
                     {event.attendeeCount}
                   </span>
                 </div>
 
-                <h2 className="mt-2 text-base font-semibold text-gray-900">{event.title}</h2>
-                <p className="mt-1 text-sm text-gray-500">
+                <h2 className="mt-2 text-base font-semibold text-ink">{event.title}</h2>
+                <p className="mt-1 text-sm text-ink-muted">
                   {formatDateTime(event.startTime)}
                   {event.location ? ` · ${event.location}` : ''}
                 </p>
-                <p className="mt-0.5 text-xs text-gray-500">Hosted by {event.hostName}</p>
+                <p className="mt-0.5 text-xs text-ink-muted">Hosted by {event.hostName}</p>
 
                 {event.description && (
-                  <p className="mt-3 line-clamp-2 text-sm text-gray-600">{event.description}</p>
+                  <p className="mt-3 line-clamp-2 text-sm text-ink-secondary">{event.description}</p>
                 )}
 
                 {upcoming && (
@@ -280,12 +280,12 @@ export const EventsPage = () => {
                   </div>
                 )}
 
-                {event.virtualLink && (
+                {safeUrl(event.virtualLink) && (
                   <a
-                    href={event.virtualLink}
+                    href={safeUrl(event.virtualLink)}
                     target="_blank"
                     rel="noreferrer noopener"
-                    className="mt-3 inline-block text-sm text-blue-600 hover:underline"
+                    className="mt-3 inline-block text-sm text-brand-ink hover:underline"
                   >
                     Join link
                   </a>

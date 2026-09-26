@@ -7,10 +7,11 @@ import { Card, CardContent } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
 import { MultiSelect, Select } from '@/components/ui/Select'
-import { Label, FieldHint } from '@/components/ui/Label'
+import { Label, FieldError, FieldHint } from '@/components/ui/Label'
 import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import { errorMessage } from '@/components/ErrorState'
+import { useFieldErrors } from '@/lib/useFieldErrors'
 import { STAGES, sectorOptions } from '@/lib/constants'
 import { OnboardingLayout } from './OnboardingLayout'
 
@@ -49,6 +50,8 @@ export const SetupFirmPage = () => {
     },
   })
 
+  const fields = useFieldErrors(mutation.error)
+
   const set = (key: keyof typeof form, value: string) =>
     setForm((prev) => ({ ...prev, [key]: value }))
 
@@ -77,7 +80,11 @@ export const SetupFirmPage = () => {
                 placeholder="e.g. Meridian Ventures"
                 required
                 autoFocus
+                {...fields.a11y('name', 'firm-name')}
               />
+              {fields.message('name') && (
+                <FieldError id={fields.errorId('firm-name')}>{fields.message('name')}</FieldError>
+              )}
             </div>
 
             <div>
@@ -116,7 +123,11 @@ export const SetupFirmPage = () => {
                   value={form.aum}
                   onChange={(event) => set('aum', event.target.value)}
                   placeholder="500"
+                  {...fields.a11y('aum', 'firm-aum')}
                 />
+                {fields.message('aum') && (
+                  <FieldError id={fields.errorId('firm-aum')}>{fields.message('aum')}</FieldError>
+                )}
               </div>
             </div>
 
@@ -138,7 +149,11 @@ export const SetupFirmPage = () => {
                   value={form.foundedYear}
                   onChange={(event) => set('foundedYear', event.target.value)}
                   placeholder="2018"
+                  {...fields.a11y('foundedYear', 'firm-founded')}
                 />
+                {fields.message('foundedYear') && (
+                  <FieldError id={fields.errorId('firm-founded')}>{fields.message('foundedYear')}</FieldError>
+                )}
               </div>
             </div>
 
@@ -150,10 +165,16 @@ export const SetupFirmPage = () => {
                 value={form.website}
                 onChange={(event) => set('website', event.target.value)}
                 placeholder="https://"
+                {...fields.a11y('website', 'firm-website')}
               />
+              {fields.message('website') && (
+                <FieldError id={fields.errorId('firm-website')}>{fields.message('website')}</FieldError>
+              )}
             </div>
 
-            {mutation.isError && <Alert variant="danger">{errorMessage(mutation.error)}</Alert>}
+            {mutation.isError && (
+              <Alert variant="danger">{fields.summary((error) => errorMessage(error))}</Alert>
+            )}
 
             <Button
               type="submit"

@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.Map;
 
 @Data
 @NoArgsConstructor
@@ -18,6 +19,8 @@ public class ApiResponse<T> {
     private T data;
     private ErrorCode errorCode;
     private String message;
+    /** Per-field validation messages, keyed by request field name. Present only on VALIDATION_ERROR. */
+    private Map<String, String> fieldErrors;
     private Instant timestamp;
 
     public static <T> ApiResponse<T> ok(T data) {

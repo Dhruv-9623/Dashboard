@@ -4,7 +4,6 @@ import { useAuth } from '@/features/auth/useAuth'
 import { UserType } from '@/features/auth/types'
 import { useProfile } from '@/features/profile/useProfile'
 import { investmentApi, investmentKeys } from '@/features/investments/api'
-import { InvestmentStatus } from '@/features/investments/types'
 import { poolApi, poolKeys } from '@/features/pool/api'
 import { opportunityApi, opportunityKeys } from '@/features/deal-triage/api'
 import { OpportunityStatus } from '@/features/deal-triage/types'
@@ -15,13 +14,30 @@ import { ConnectionStatus } from '@/features/messaging/types'
 import { suggestionApi, suggestionKeys } from '@/features/ai-suggestions/api'
 import { SuggestionStatus } from '@/features/ai-suggestions/types'
 import { eventApi, eventKeys } from '@/features/events/api'
+import { rsvpLabels } from '@/features/events/types'
 import { PageHeader } from '@/components/PageHeader'
-import { StatTile } from '@/components/StatTile'
-import { Card, CardContent } from '@/components/ui/Card'
-import { Button } from '@/components/ui/Button'
+import { ErrorState } from '@/components/ErrorState'
+import { MetricCard } from '@/components/MetricCard'
+import { AllocationBar } from '@/components/AllocationBar'
+import { DashboardHero, greetingFor } from '@/components/DashboardHero'
+import { ChartEmpty, ChartFrame } from '@/components/charts/ChartFrame'
+import { AreaTrend } from '@/components/charts/AreaTrend'
+import { BarSeries } from '@/components/charts/BarSeries'
+import { RankedBars } from '@/components/charts/RankedBars'
+import {
+  cumulativeDeployed,
+  dealsPerQuarter,
+  dominantCurrency,
+  sectorExposure,
+  sparkValues,
+} from '@/features/investments/portfolioSeries'
+import { AttentionList } from '@/components/AttentionList'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { buttonClass } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
-import { Progress } from '@/components/ui/Progress'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { EntityAvatar } from '@/components/ui/EntityAvatar'
+import { AiMark } from '@/components/ai/AiOrb'
 import {
   CalendarIcon,
   ChevronRightIcon,
@@ -29,9 +45,28 @@ import {
   InboxIcon,
   MessageIcon,
   PlusIcon,
-  SparkIcon,
 } from '@/components/icons'
-import { formatDateTime, formatMoney } from '@/lib/constants'
+import {
+  formatCurrencyTotals,
+  formatDateTime,
+  formatMoney,
+  formatMoneyShort,
+  formatMoneyTotals,
+  formatDate,
+  pluralize,
+  stageLabel,
+} from '@/lib/constants'
+import { useEntrance } from '@/lib/useMotion'
+
+/** A row of metrics that animates in together. */
+const MetricRow = ({ children, when }: { children: React.ReactNode; when: unknown }) => {
+  const ref = useEntrance<HTMLDivElement>(when)
+  return (
+    <div ref={ref} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {children}
+    </div>
+  )
+}
 
 const QuickLink = ({
   to,
@@ -46,16 +81,21 @@ const QuickLink = ({
 }) => (
   <Link
     to={to}
-    className="group rounded-lg border border-gray-200 bg-white p-5 transition-all hover:border-gray-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+    className="group flex items-start gap-3 rounded-xl border border-line bg-surface p-4 shadow-card transition-all hover:border-line-strong hover:shadow-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/45"
   >
-    <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-      <Icon className="h-5 w-5" />
-    </div>
-    <h2 className="flex items-center gap-1 text-base font-semibold text-gray-900">
-      {title}
-      <ChevronRightIcon className="h-4 w-4 text-gray-400 transition-transform group-hover:translate-x-0.5" />
-    </h2>
-    <p className="mt-1.5 text-sm text-gray-500">{body}</p>
+    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-subtle text-brand">
+      <Icon className="size-4" aria-hidden="true" />
+    </span>
+    <span className="min-w-0">
+      <span className="flex items-center gap-1 text-[13px] font-semibold text-ink">
+        {title}
+        <ChevronRightIcon
+          className="size-3.5 text-ink-muted transition-transform group-hover:translate-x-0.5"
+          aria-hidden="true"
+        />
+      </span>
+      <span className="mt-0.5 block text-xs leading-relaxed text-ink-muted">{body}</span>
+    </span>
   </Link>
 )
 
@@ -66,26 +106,30 @@ const UpcomingEvents = () => {
   if (upcoming.length === 0) return null
 
   return (
-    <Card className="mt-6">
-      <CardContent className="py-5">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-900">Upcoming events</h2>
-          <Link to="/events" className="text-sm text-blue-600 hover:underline">
-            View all
-          </Link>
-        </div>
-        <ul className="space-y-2">
+    <Card>
+      <CardHeader>
+        <CardTitle>Upcoming events</CardTitle>
+        <Link to="/events" className="text-[13px] font-medium text-brand-ink hover:underline">
+          View all
+        </Link>
+      </CardHeader>
+      <CardContent className="p-2">
+        <ul>
           {upcoming.map((event) => (
-            <li
-              key={event.id}
-              className="flex items-center gap-3 rounded border border-gray-200 px-3 py-2"
-            >
-              <CalendarIcon className="h-4 w-4 shrink-0 text-gray-400" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-gray-900">{event.title}</p>
-                <p className="text-xs text-gray-500">{formatDateTime(event.startTime)}</p>
-              </div>
-              {event.myRsvp && <Badge variant="secondary">{event.myRsvp}</Badge>}
+            <li key={event.id}>
+              <Link
+                to="/events"
+                className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/45"
+              >
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-line bg-surface-sunken text-ink-muted">
+                  <CalendarIcon className="size-4" aria-hidden="true" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] font-medium text-ink">{event.title}</span>
+                  <span className="block text-xs text-ink-muted">{formatDateTime(event.startTime)}</span>
+                </span>
+                {event.myRsvp && <Badge variant="secondary">{rsvpLabels[event.myRsvp]}</Badge>}
+              </Link>
             </li>
           ))}
         </ul>
@@ -94,7 +138,8 @@ const UpcomingEvents = () => {
   )
 }
 
-const SharedSignals = () => {
+/** Connection requests and AI matches — the two things that arrive on their own. */
+const Inbound = () => {
   const requests = useQuery({
     queryKey: messagingKeys.connections('incoming'),
     queryFn: () => messagingApi.listConnections('incoming'),
@@ -114,39 +159,91 @@ const SharedSignals = () => {
   ).length
 
   return (
-    <div className="mt-6 grid gap-4 md:grid-cols-2">
-      <QuickLink
-        to="/messages"
-        Icon={MessageIcon}
-        title={pendingRequests > 0 ? `${pendingRequests} connection request(s)` : 'Messages'}
-        body="Chat unlocks once both sides accept a connection."
-      />
-      <QuickLink
-        to="/suggestions"
-        Icon={SparkIcon}
-        title={pendingSuggestions > 0 ? `${pendingSuggestions} new match(es)` : 'AI Suggestions'}
-        body="Matches generated from your profile and activity."
-      />
-    </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>Waiting on you</CardTitle>
+      </CardHeader>
+      <CardContent className="p-2">
+        <Link
+          to="/messages"
+          className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/45"
+        >
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-subtle text-brand">
+            <MessageIcon className="size-4" aria-hidden="true" />
+          </span>
+          <span className="min-w-0 flex-1 text-[13px] text-ink">
+            {pendingRequests > 0 ? pluralize(pendingRequests, 'connection request') : 'Messages'}
+          </span>
+          {pendingRequests > 0 && <Badge variant="default">{pendingRequests}</Badge>}
+          <ChevronRightIcon className="size-4 shrink-0 text-ink-muted" aria-hidden="true" />
+        </Link>
+        <Link
+          to="/suggestions"
+          className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/45"
+        >
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-sunken">
+            <AiMark />
+          </span>
+          <span className="min-w-0 flex-1 text-[13px] text-ink">
+            {pendingSuggestions > 0
+              ? pluralize(pendingSuggestions, 'new match', 'new matches')
+              : 'AI suggestions'}
+          </span>
+          {pendingSuggestions > 0 && <Badge variant="default">{pendingSuggestions}</Badge>}
+          <ChevronRightIcon className="size-4 shrink-0 text-ink-muted" aria-hidden="true" />
+        </Link>
+      </CardContent>
+    </Card>
   )
 }
 
 const VCDashboard = () => {
   const { firm } = useProfile()
 
-  const investments = useQuery({ queryKey: investmentKeys.all, queryFn: investmentApi.list })
-  const pool = useQuery({ queryKey: poolKeys.all, queryFn: poolApi.list })
+  // Portfolio figures come from the server: correct across the whole portfolio, not just a page.
+  const investments = useQuery({ queryKey: investmentKeys.summary, queryFn: investmentApi.summary })
+  // The records themselves, for the derived history below. One page is enough for
+  // the charts to be honest about — they say so in their own subtitles.
+  const ledgerParams = { size: 100 }
+  const ledger = useQuery({
+    queryKey: investmentKeys.list(ledgerParams),
+    queryFn: () => investmentApi.list(ledgerParams),
+  })
+  const poolParams = { size: 5 }
+  const pool = useQuery({ queryKey: poolKeys.list(poolParams), queryFn: () => poolApi.list(poolParams) })
   const deals = useQuery({
     queryKey: opportunityKeys.list(),
     queryFn: () => opportunityApi.list(),
   })
 
-  const holdings = investments.data ?? []
-  const active = holdings.filter((item) => item.status === InvestmentStatus.ACTIVE)
-  const deployed = holdings.reduce((total, item) => total + item.amount, 0)
   const pendingTriage = (deals.data ?? []).filter(
     (deal) => deal.status === OpportunityStatus.PENDING_REVIEW
   ).length
+
+  // A failed load must never render as ₹0 / 0 — that reads as a real, empty portfolio.
+  // Only the portfolio queries gate the tiles; a failing triage count shows as "—" beside figures
+  // that did load, rather than hiding all of them.
+  const statsError = investments.error ?? pool.error
+  const summary = investments.data
+  const loading = investments.isLoading || pool.isLoading
+
+  const deployed = summary?.totalsByCurrency ?? {}
+  const holdings = summary?.activeCount ?? 0
+  const tracked = pool.data?.totalElements ?? 0
+
+  // Derived series. A single currency per chart: adding rupees to dollars would
+  // be a lie, so each plot states which currency it's showing.
+  const records = ledger.data?.items ?? []
+  const currency = dominantCurrency(records) ?? 'INR'
+  const deploymentSeries = cumulativeDeployed(records, currency)
+  const paceSeries = dealsPerQuarter(records)
+  const sectors = sectorExposure(records, currency)
+  const deployedTrend = sparkValues(deploymentSeries)
+  const money = (value: number) => formatMoney(value, currency)
+  const moneyTick = (value: number) => formatMoneyShort(value, currency)
+  // One currency makes the allocation bar a single full-width segment — a
+  // one-bar chart, which the metric card above already says better.
+  const multiCurrency = Object.keys(deployed).length > 1
 
   return (
     <>
@@ -154,58 +251,230 @@ const VCDashboard = () => {
         title={firm?.name ? `${firm.name} overview` : 'Overview'}
         description="Your portfolio, pipeline, and network at a glance."
         actions={
-          <Link to="/deal-triage/new">
-            <Button>
-              <PlusIcon className="mr-2 h-4 w-4" />
-              New opportunity
-            </Button>
+          <Link to="/deal-triage/new" className={buttonClass()}>
+            <PlusIcon className="size-4" aria-hidden="true" />
+            New opportunity
           </Link>
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {investments.isLoading ? (
-          Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-24" />)
+      <DashboardHero
+        className="mb-4"
+        greeting={greetingFor()}
+        busy={investments.isLoading || ledger.isFetching}
+        headline={
+          holdings === 0
+            ? 'No positions on the books yet — record your first investment to start the portfolio view.'
+            : `${formatCurrencyTotals(deployed)} at work across ${pluralize(holdings, 'company', 'companies')}${
+                pendingTriage > 0 ? `, with ${pluralize(pendingTriage, 'opportunity', 'opportunities')} waiting on you.` : '.'
+              }`
+        }
+        facts={[
+          ...(sectors.length > 0
+            ? [{ label: 'Largest sector', value: `${sectors[0].label} · ${Math.round(sectors[0].share * 100)}%` }]
+            : []),
+          ...(paceSeries.length > 0
+            ? [{ label: 'Deals this quarter', value: String(paceSeries[paceSeries.length - 1].value) }]
+            : []),
+          ...(records.length > 0
+            ? [
+                {
+                  label: 'Last cheque',
+                  value: formatDate(
+                    [...records].sort((a, b) => b.investmentDate.localeCompare(a.investmentDate))[0]
+                      .investmentDate
+                  ),
+                },
+              ]
+            : []),
+        ]}
+      />
+
+      {statsError ? (
+        <ErrorState
+          title="Couldn't load your portfolio figures"
+          error={statsError}
+          onRetry={() => {
+            investments.refetch()
+            pool.refetch()
+          }}
+        />
+      ) : loading ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Skeleton key={index} className="h-[104px]" />
+          ))}
+        </div>
+      ) : (
+        <MetricRow when={`${holdings}-${tracked}`}>
+          <MetricCard
+            label="Capital deployed"
+            value={formatCurrencyTotals(deployed)}
+            hint={
+              Object.keys(deployed).length > 1
+                ? `Across ${Object.keys(deployed).length} currencies`
+                : 'Across all active positions'
+            }
+            trend={deployedTrend}
+            accent="var(--viz-1)"
+            emphasis
+          />
+          <MetricCard
+            label="Active holdings"
+            count={{ to: holdings, format: (value) => String(Math.round(value)) }}
+            hint={holdings === 0 ? 'Record your first position' : 'Positions still held'}
+            accent="var(--viz-2)"
+          />
+          <MetricCard
+            label="Tracked in pool"
+            count={{ to: tracked, format: (value) => String(Math.round(value)) }}
+            hint="Companies you're watching"
+            accent="var(--viz-3)"
+          />
+          <MetricCard
+            label="Awaiting triage"
+            value={deals.isError ? '—' : undefined}
+            count={
+              deals.isError
+                ? undefined
+                : { to: pendingTriage, format: (value) => String(Math.round(value)) }
+            }
+            hint={deals.isError ? "Couldn't load deal triage" : 'Scored, not yet reviewed'}
+            tone={!deals.isError && pendingTriage > 0 ? 'notice' : 'default'}
+            accent="var(--viz-4)"
+          />
+        </MetricRow>
+      )}
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+        <ChartFrame
+          title="Capital deployed over time"
+          description={`Running total in ${currency}, by the month each cheque was written.`}
+          stale={ledger.isFetching && !ledger.isLoading}
+          aside={
+            deploymentSeries.length > 0 ? (
+              <span className="text-[13px] font-semibold tabular text-ink">
+                {money(deploymentSeries[deploymentSeries.length - 1].value)}
+              </span>
+            ) : undefined
+          }
+          table={{
+            columns: ['Month', `Cumulative (${currency})`],
+            rows: deploymentSeries.map((point) => [point.label, money(point.value)]),
+          }}
+        >
+          {deploymentSeries.length > 1 ? (
+            <AreaTrend
+              data={deploymentSeries}
+              format={money}
+              tickFormat={moneyTick}
+              seriesName="Deployed"
+            />
+          ) : (
+            <ChartEmpty message="Two months of investment history draws this curve. Record a position to start it." />
+          )}
+        </ChartFrame>
+
+        <ChartFrame
+          title="Sector exposure"
+          description="Active and exited positions by sector, largest first."
+          stale={ledger.isFetching && !ledger.isLoading}
+          table={{
+            columns: ['Sector', `Deployed (${currency})`],
+            rows: sectors.map((sector) => [sector.label, money(sector.value)]),
+          }}
+        >
+          {sectors.length > 0 ? (
+            <RankedBars items={sectors} format={money} />
+          ) : (
+            <ChartEmpty message="Sector mix appears once you hold a position." />
+          )}
+        </ChartFrame>
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_1.4fr]">
+        <ChartFrame
+          title="Pace"
+          description="Cheques written per quarter."
+          stale={ledger.isFetching && !ledger.isLoading}
+          table={{
+            columns: ['Quarter', 'Deals'],
+            rows: paceSeries.map((point) => [point.label, String(point.value)]),
+          }}
+        >
+          {paceSeries.length > 1 ? (
+            <BarSeries data={paceSeries} format={(value) => String(value)} seriesName="Deals" color="var(--viz-2)" />
+          ) : (
+            <ChartEmpty message="Pace appears once you have deals across more than one quarter." />
+          )}
+        </ChartFrame>
+
+        {multiCurrency ? (
+          <AllocationBar
+            title="Where the money is"
+            description="Active positions by currency, largest first."
+            segments={Object.entries(deployed).map(([code, total], index) => ({
+              label: code,
+              value: total,
+              formatted: formatMoney(total, code),
+              color: `var(--viz-${(index % 6) + 1})`,
+            }))}
+            emptyMessage="No active positions yet. Recording an investment fills this in."
+          />
         ) : (
-          <>
-            <StatTile
-              label="Capital deployed"
-              value={formatMoney(deployed, holdings[0]?.currency ?? 'INR')}
-            />
-            <StatTile label="Active holdings" value={active.length} />
-            <StatTile label="Tracked in pool" value={pool.data?.length ?? '—'} />
-            <StatTile
-              label="Awaiting triage"
-              value={pendingTriage}
-              tone={pendingTriage > 0 ? 'amber' : 'default'}
-            />
-          </>
+          <Inbound />
         )}
       </div>
 
-      <div className="mt-6 grid gap-4 md:grid-cols-3">
-        <QuickLink
-          to="/deal-flow"
-          Icon={CoinsIcon}
-          title="Deal Flow"
-          body="Startups actively raising that match your sector and stage filters."
+      <div className="mt-4 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+        <AttentionList
+          title="Needs a decision"
+          items={[
+            ...(pendingTriage > 0
+              ? [
+                  {
+                    id: 'triage',
+                    to: '/deal-triage',
+                    icon: <InboxIcon className="size-4" aria-hidden="true" />,
+                    title: pluralize(pendingTriage, 'opportunity', 'opportunities') + ' scored and waiting',
+                    meta: 'Deal Triage',
+                    tone: 'notice' as const,
+                  },
+                ]
+              : []),
+            ...(pool.data?.items ?? []).slice(0, 4).map((entry) => ({
+              id: entry.id,
+              to: '/pool',
+              icon: <EntityAvatar name={entry.companyName ?? 'Company'} size="sm" />,
+              title: entry.companyName ?? 'Tracked company',
+              // stageLabel, not the raw enum: the API sends SERIES_A, the reader wants "Series A".
+              meta:
+                [entry.sector, entry.stage ? stageLabel(entry.stage) : null]
+                  .filter(Boolean)
+                  .join(' · ') || 'In your pool',
+              tone: entry.interestLevel === 'HIGH_PRIORITY' ? ('brand' as const) : ('default' as const),
+            })),
+          ]}
+          emptyMessage="Nothing waiting. Add companies to your pool to build a pipeline."
         />
-        <QuickLink
-          to="/deal-triage"
-          Icon={InboxIcon}
-          title="Deal Triage"
-          body="Opportunities scored against your thesis, with cited rationale."
-        />
-        <QuickLink
-          to="/investments"
-          Icon={CalendarIcon}
-          title="Investments"
-          body="Positions you hold, and the source for Conflict Sentinel and Pulse."
-        />
-      </div>
 
-      <SharedSignals />
-      <UpcomingEvents />
+        <div className="grid gap-3 content-start">
+          {multiCurrency && <Inbound />}
+          <QuickLink
+            to="/deal-flow"
+            Icon={CoinsIcon}
+            title="Deal Flow"
+            body="Startups actively raising that match your sector and stage."
+          />
+          <QuickLink
+            to="/investments"
+            Icon={CalendarIcon}
+            title="Investments"
+            body="Positions you hold, and the source for Conflict Sentinel and Pulse."
+          />
+          <UpcomingEvents />
+        </div>
+      </div>
     </>
   )
 }
@@ -217,7 +486,8 @@ const StartupDashboard = () => {
 
   const rounds = cycles.data ?? []
   const open = rounds.find((cycle) => cycle.status === FundingCycleStatus.OPEN)
-  const raised = rounds.reduce((total, cycle) => total + cycle.committedAmount, 0)
+  const committedByRound = rounds.map((cycle) => ({ amount: cycle.committedAmount, currency: cycle.currency }))
+  const progress = open && open.targetAmount ? (open.committedAmount / open.targetAmount) * 100 : 0
 
   return (
     <>
@@ -225,67 +495,120 @@ const StartupDashboard = () => {
         title={startup?.name ? `${startup.name} overview` : 'Overview'}
         description="Your round, your investors, and who's looking at your profile."
         actions={
-          <Link to="/funding">
-            <Button>
-              <PlusIcon className="mr-2 h-4 w-4" />
-              Manage round
-            </Button>
+          <Link to="/funding" className={buttonClass()}>
+            <PlusIcon className="size-4" aria-hidden="true" />
+            Manage round
           </Link>
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {cycles.isLoading ? (
-          Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-24" />)
-        ) : (
-          <>
-            <StatTile
-              label="Total committed"
-              value={formatMoney(raised, rounds[0]?.currency ?? 'INR')}
-            />
-            <StatTile label="Current round" value={open?.roundType ?? '—'} />
-            <StatTile label="Investors committed" value={open?.commitmentCount ?? 0} />
-            <StatTile label="Rounds run" value={rounds.length} />
-          </>
-        )}
-      </div>
+      <DashboardHero
+        className="mb-4"
+        greeting={greetingFor()}
+        busy={cycles.isFetching}
+        headline={
+          open
+            ? `${formatMoney(open.committedAmount, open.currency)} committed of ${formatMoney(
+                open.targetAmount,
+                open.currency
+              )} on your open ${open.roundType} round.`
+            : 'No round open right now — open one to start taking commitments.'
+        }
+        facts={[
+          { label: 'Rounds run', value: String(rounds.length) },
+          ...(open ? [{ label: 'Investors committed', value: String(open.commitmentCount) }] : []),
+          ...(open ? [{ label: 'Progress', value: `${Math.round(progress)}%` }] : []),
+        ]}
+      />
 
-      {open && (
-        <Card className="mt-6">
-          <CardContent className="py-5">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h2 className="text-sm font-semibold text-gray-900">{open.roundType} progress</h2>
-              <span className="text-sm text-gray-500">
-                {formatMoney(open.committedAmount, open.currency)} of{' '}
-                {formatMoney(open.targetAmount, open.currency)}
-              </span>
-            </div>
-            <Progress
-              className="mt-3"
-              value={open.targetAmount ? (open.committedAmount / open.targetAmount) * 100 : 0}
-              tone="green"
-            />
-          </CardContent>
-        </Card>
+      {cycles.isError ? (
+        <ErrorState
+          title="Couldn't load your funding rounds"
+          error={cycles.error}
+          onRetry={() => cycles.refetch()}
+        />
+      ) : cycles.isLoading ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Skeleton key={index} className="h-[104px]" />
+          ))}
+        </div>
+      ) : (
+        <MetricRow when={rounds.length}>
+          <MetricCard
+            label="Total committed"
+            value={formatMoneyTotals(committedByRound)}
+            hint={open ? `Toward ${formatMoney(open.targetAmount, open.currency)}` : 'Across all rounds'}
+            accent="var(--viz-2)"
+            emphasis
+          />
+          <MetricCard
+            label="Current round"
+            value={open?.roundType ?? '—'}
+            hint={open ? 'Open to investors' : 'No round open'}
+            accent="var(--viz-1)"
+          />
+          <MetricCard
+            label="Investors committed"
+            count={{ to: open?.commitmentCount ?? 0, format: (value) => String(Math.round(value)) }}
+            hint="On the open round"
+            accent="var(--viz-3)"
+          />
+          <MetricCard
+            label="Rounds run"
+            count={{ to: rounds.length, format: (value) => String(Math.round(value)) }}
+            hint="Including closed"
+            accent="var(--viz-5)"
+          />
+        </MetricRow>
       )}
 
-      <div className="mt-6 grid gap-4 md:grid-cols-2">
+      {open && (
+        <div className="mt-4 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+          <AllocationBar
+            title={`${open.roundType} progress`}
+            description={`${formatMoney(open.committedAmount, open.currency)} committed of ${formatMoney(
+              open.targetAmount,
+              open.currency
+            )}`}
+            segments={[
+              {
+                label: 'Committed',
+                value: open.committedAmount,
+                formatted: `${Math.round(progress)}%`,
+                color: 'var(--viz-2)',
+              },
+              {
+                label: 'Remaining',
+                value: Math.max(open.targetAmount - open.committedAmount, 0),
+                formatted: formatMoney(Math.max(open.targetAmount - open.committedAmount, 0), open.currency),
+                color: 'var(--line-strong)',
+              },
+            ]}
+            emptyMessage="No commitments yet."
+          />
+          <Inbound />
+        </div>
+      )}
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
         <QuickLink
           to="/funding"
           Icon={CoinsIcon}
-          title="Funding Rounds"
+          title="Funding rounds"
           body="Open a round, set ticket sizes, and track commitments as they firm up."
         />
         <QuickLink
           to="/discover"
           Icon={CalendarIcon}
-          title="Discover Investors"
+          title="Discover investors"
           body="Find firms whose stage and sector match the round you're raising."
         />
       </div>
 
-      <SharedSignals />
-      <UpcomingEvents />
+      <div className="mt-4">
+        <UpcomingEvents />
+      </div>
     </>
   )
 }

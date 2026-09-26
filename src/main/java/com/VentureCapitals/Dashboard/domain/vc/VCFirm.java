@@ -5,6 +5,7 @@ import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
@@ -35,7 +36,8 @@ public class VCFirm extends BaseEntity {
 
     private String investmentStage;
 
-    @ElementCollection
+    // Eager: the list is small and is serialised after the service transaction closes (open-in-view is off).
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "vc_firm_sectors", joinColumns = @JoinColumn(name = "vc_firm_id"))
     @Column(name = "sector")
     private List<String> sectors;

@@ -1,137 +1,128 @@
 package com.VentureCapitals.Dashboard.domain.pool;
 
+import com.VentureCapitals.Dashboard.common.exception.BusinessRuleViolationException;
 import com.VentureCapitals.Dashboard.common.exception.EntityNotFoundException;
-import com.VentureCapitals.Dashboard.common.exception.UnauthorizedException;
 import com.VentureCapitals.Dashboard.common.exception.ValidationException;
 import com.VentureCapitals.Dashboard.domain.startup.Startup;
 import com.VentureCapitals.Dashboard.domain.startup.StartupRepository;
 import com.VentureCapitals.Dashboard.domain.user.User;
-import com.VentureCapitals.Dashboard.domain.vc.VCFirm;
-import com.VentureCapitals.Dashboard.domain.vc.VCFirmRepository;
+import com.VentureCapitals.Dashboard.domain.vc.FirmAccessPolicy;
 import com.VentureCapitals.Dashboard.domain.vc.VCMember;
-import com.VentureCapitals.Dashboard.domain.vc.VCMemberRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
+/**
+ * The signed-in VC's pool: companies the firm is tracking but hasn't invested in. Scoped to the
+ * actor's own firm through {@link FirmAccessPolicy}; any member may add, edit and remove entries.
+ */
 @Slf4j
 @Service
 @Transactional
 public class PoolEntryService {
     private final PoolEntryRepository poolEntryRepository;
-    private final VCFirmRepository vcFirmRepository;
-    private final VCMemberRepository vcMemberRepository;
     private final StartupRepository startupRepository;
+    private final FirmAccessPolicy accessPolicy;
 
-    public PoolEntryService(PoolEntryRepository poolEntryRepository, VCFirmRepository vcFirmRepository,
-                            VCMemberRepository vcMemberRepository, StartupRepository startupRepository) {
+    public PoolEntryService(PoolEntryRepository poolEntryRepository, StartupRepository startupRepository,
+                            FirmAccessPolicy accessPolicy) {
         this.poolEntryRepository = poolEntryRepository;
-        this.vcFirmRepository = vcFirmRepository;
-        this.vcMemberRepository = vcMemberRepository;
         this.startupRepository = startupRepository;
+        this.accessPolicy = accessPolicy;
     }
 
-    public PoolEntry createPoolEntry(UUID vcFirmId, User actor, CreatePoolEntryRequest request) {
-        VCFirm firm = vcFirmRepository.findById(vcFirmId)
-                .orElseThrow(() -> new EntityNotFoundException("VC Firm not found: " + vcFirmId));
-
-        VCMember actorMembership = vcMemberRepository.findByUserId(actor.getId())
-                .orElseThrow(() -> new UnauthorizedException("User is not a member of any firm"));
-
-        if (!actorMembership.getFirm().getId().equals(vcFirmId)) {
-            throw new UnauthorizedException("User does not belong to this firm");
-        }
-
-        validateXorConstraint(request.getStartupId(), request.getCompanyName());
-
-        Startup startup = null;
-        if (request.getStartupId() != null) {
-            startup = startupRepository.findById(request.getStartupId())
-                    .orElseThrow(() -> new EntityNotFoundException("Startup not found: " + request.getStartupId()));
-        }
+    public PoolEntry createPoolEntry(User actor, PoolEntryRequest request) {
+        VCMember membership = accessPolicy.requireAnyMembership(actor);
+        UUID firmId = membership.getFirm().getId();
 
         PoolEntry entry = PoolEntry.builder()
-                .vcFirm(firm)
-                .startup(startup)
-                .companyName(request.getCompanyName())
-                .addedBy(actorMembership)
-                .tags(request.getTags())
-                .notes(request.getNotes())
-                .interestLevel(request.getInterestLevel())
+                .vcFirm(membership.getFirm())
+                .addedBy(membership)
                 .build();
 
-        PoolEntry saved = poolEntryRepository.save(entry);
-        log.info("Pool entry created: firmId={}, entryId={}", vcFirmId, saved.getId());
+        if (request.getStartupId() != null) {
+            // On-platform: identified by the startup; its name, sector and stage come from the profile.
+            Startup startup = startupRepository.findById(request.getStartupId())
+                    .orElseThrow(() -> new EntityNotFoundException("Startup not found: " + request.getStartupId()));
+            if (poolEntryRepository.existsByVcFirmIdAndStartupId(firmId, startup.getId())) {
+                throw new BusinessRuleViolationException(startup.getName() + " is already in your pool");
+            }
+            entry.setStartup(startup);
+        } else {
+            applyOffPlatformCompany(entry, request);
+        }
+        applyTracking(entry, request);
 
+        PoolEntry saved = poolEntryRepository.save(entry);
+        log.info("Pool entry created: firmId={}, entryId={}", firmId, saved.getId());
         return saved;
     }
 
-    public PoolEntry updatePoolEntry(UUID poolEntryId, User actor, UpdatePoolEntryRequest request) {
-        PoolEntry entry = poolEntryRepository.findById(poolEntryId)
-                .orElseThrow(() -> new EntityNotFoundException("Pool entry not found: " + poolEntryId));
+    /** Updates tracking fields; off-platform entries can also correct the company details. */
+    public PoolEntry updatePoolEntry(User actor, UUID poolEntryId, PoolEntryRequest request) {
+        PoolEntry entry = findEntry(poolEntryId);
+        accessPolicy.requireMember(actor, entry.getVcFirm().getId());
 
-        VCMember actorMembership = vcMemberRepository.findByUserId(actor.getId())
-                .orElseThrow(() -> new UnauthorizedException("User is not a member of any firm"));
-
-        if (!actorMembership.getFirm().getId().equals(entry.getVcFirm().getId())) {
-            throw new UnauthorizedException("User does not have access to this pool entry");
+        if (entry.getStartup() == null) {
+            applyOffPlatformCompany(entry, request);
         }
+        applyTracking(entry, request);
 
-        entry.setTags(request.getTags());
-        entry.setNotes(request.getNotes());
-        entry.setInterestLevel(request.getInterestLevel());
-
-        PoolEntry updated = poolEntryRepository.save(entry);
         log.info("Pool entry updated: entryId={}", poolEntryId);
-
-        return updated;
+        return poolEntryRepository.save(entry);
     }
 
-    public void deletePoolEntry(UUID poolEntryId, User actor) {
-        PoolEntry entry = poolEntryRepository.findById(poolEntryId)
-                .orElseThrow(() -> new EntityNotFoundException("Pool entry not found: " + poolEntryId));
-
-        VCMember actorMembership = vcMemberRepository.findByUserId(actor.getId())
-                .orElseThrow(() -> new UnauthorizedException("User is not a member of any firm"));
-
-        if (!actorMembership.getFirm().getId().equals(entry.getVcFirm().getId())) {
-            throw new UnauthorizedException("User does not have access to this pool entry");
-        }
-
-        poolEntryRepository.deleteById(poolEntryId);
+    public void deletePoolEntry(User actor, UUID poolEntryId) {
+        PoolEntry entry = findEntry(poolEntryId);
+        accessPolicy.requireMember(actor, entry.getVcFirm().getId());
+        poolEntryRepository.delete(entry);
         log.info("Pool entry deleted: entryId={}", poolEntryId);
     }
 
     @Transactional(readOnly = true)
-    public PoolEntry getPoolEntry(UUID poolEntryId) {
-        return poolEntryRepository.findById(poolEntryId)
+    public Page<PoolEntry> listPoolEntries(User actor, InterestLevel interestLevel, Pageable pageable) {
+        UUID firmId = accessPolicy.requireAnyMembership(actor).getFirm().getId();
+        return interestLevel == null
+                ? poolEntryRepository.findByVcFirmId(firmId, pageable)
+                : poolEntryRepository.findByVcFirmIdAndInterestLevel(firmId, interestLevel, pageable);
+    }
+
+    private void applyOffPlatformCompany(PoolEntry entry, PoolEntryRequest request) {
+        String name = request.getCompanyName() == null ? "" : request.getCompanyName().trim();
+        if (name.isEmpty()) {
+            throw new ValidationException("Enter the company name or pick a startup on the platform");
+        }
+        entry.setCompanyName(name);
+        entry.setCompanySector(blankToNull(request.getSector()));
+        entry.setCompanyStage(blankToNull(request.getStage()));
+    }
+
+    private void applyTracking(PoolEntry entry, PoolEntryRequest request) {
+        List<String> tags = new ArrayList<>();
+        if (request.getTags() != null) {
+            request.getTags().stream()
+                    .map(String::trim)
+                    .filter(tag -> !tag.isEmpty())
+                    .distinct()
+                    .forEach(tags::add);
+        }
+        entry.setTags(tags);
+        entry.setNotes(blankToNull(request.getNotes()));
+        entry.setInterestLevel(request.getInterestLevel());
+    }
+
+    private PoolEntry findEntry(UUID poolEntryId) {
+        return poolEntryRepository.findWithDetailsById(poolEntryId)
                 .orElseThrow(() -> new EntityNotFoundException("Pool entry not found: " + poolEntryId));
     }
 
-    @Transactional(readOnly = true)
-    public Page<PoolEntry> listPoolEntriesByFirm(UUID vcFirmId, Pageable pageable) {
-        return poolEntryRepository.findByVcFirmId(vcFirmId, pageable);
-    }
-
-    @Transactional(readOnly = true)
-    public Page<PoolEntry> listPoolEntriesByFirmAndInterestLevel(UUID vcFirmId, InterestLevel interestLevel, Pageable pageable) {
-        return poolEntryRepository.findByVcFirmIdAndInterestLevel(vcFirmId, interestLevel, pageable);
-    }
-
-    private void validateXorConstraint(UUID startupId, String companyName) {
-        boolean hasStartupId = startupId != null;
-        boolean hasCompanyName = companyName != null && !companyName.isBlank();
-
-        if (hasStartupId && hasCompanyName) {
-            throw new ValidationException("Cannot set both startup ID and company name");
-        }
-
-        if (!hasStartupId && !hasCompanyName) {
-            throw new ValidationException("Must set either startup ID or company name");
-        }
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }

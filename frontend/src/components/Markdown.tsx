@@ -8,14 +8,14 @@ const renderInline = (text: string) =>
   text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((token, index) => {
     if (token.startsWith('**') && token.endsWith('**')) {
       return (
-        <strong key={index} className="font-semibold text-gray-900">
+        <strong key={index} className="font-semibold text-ink">
           {token.slice(2, -2)}
         </strong>
       )
     }
     if (token.startsWith('`') && token.endsWith('`')) {
       return (
-        <code key={index} className="rounded bg-gray-100 px-1 py-0.5 text-[0.85em] text-gray-800">
+        <code key={index} className="rounded bg-surface-hover px-1 py-0.5 text-[0.85em] text-ink">
           {token.slice(1, -1)}
         </code>
       )
@@ -30,7 +30,7 @@ export const Markdown = ({ content, className }: { content: string; className?: 
   const flushList = (key: string) => {
     if (listBuffer.length === 0) return
     blocks.push(
-      <ul key={key} className="my-3 list-disc space-y-1.5 pl-5 text-sm text-gray-700">
+      <ul key={key} className="my-3 list-disc space-y-1.5 pl-5 text-sm text-ink-secondary">
         {listBuffer.map((item, index) => (
           <li key={index}>{renderInline(item)}</li>
         ))}
@@ -58,13 +58,13 @@ export const Markdown = ({ content, className }: { content: string; className?: 
       const text = renderInline(heading[2])
       if (level <= 2) {
         blocks.push(
-          <h2 key={key} className="mb-2 mt-6 text-lg font-semibold text-gray-900 first:mt-0">
+          <h2 key={key} className="mb-2 mt-6 text-lg font-semibold text-ink first:mt-0">
             {text}
           </h2>
         )
       } else {
         blocks.push(
-          <h3 key={key} className="mb-1.5 mt-5 text-sm font-semibold uppercase tracking-wide text-gray-500">
+          <h3 key={key} className="mb-1.5 mt-5 text-sm font-semibold uppercase tracking-wide text-ink-muted">
             {text}
           </h3>
         )
@@ -73,7 +73,7 @@ export const Markdown = ({ content, className }: { content: string; className?: 
     }
 
     blocks.push(
-      <p key={key} className="my-2.5 text-sm leading-relaxed text-gray-700">
+      <p key={key} className="my-2.5 text-sm leading-relaxed text-ink-secondary">
         {renderInline(line)}
       </p>
     )

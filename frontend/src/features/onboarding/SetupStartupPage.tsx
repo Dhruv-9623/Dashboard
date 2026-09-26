@@ -7,10 +7,11 @@ import { Card, CardContent } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
 import { Select } from '@/components/ui/Select'
-import { Label, FieldHint } from '@/components/ui/Label'
+import { Label, FieldError, FieldHint } from '@/components/ui/Label'
 import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import { errorMessage } from '@/components/ErrorState'
+import { useFieldErrors } from '@/lib/useFieldErrors'
 import { STAGES, sectorOptions } from '@/lib/constants'
 import { OnboardingLayout } from './OnboardingLayout'
 
@@ -53,6 +54,8 @@ export const SetupStartupPage = () => {
     },
   })
 
+  const fields = useFieldErrors(mutation.error)
+
   const set = (key: keyof typeof form, value: string) =>
     setForm((prev) => ({ ...prev, [key]: value }))
 
@@ -82,7 +85,11 @@ export const SetupStartupPage = () => {
                 onChange={(event) => set('name', event.target.value)}
                 required
                 autoFocus
+                {...fields.a11y('name', 'startup-name')}
               />
+              {fields.message('name') && (
+                <FieldError id={fields.errorId('startup-name')}>{fields.message('name')}</FieldError>
+              )}
             </div>
 
             <div>
@@ -108,7 +115,11 @@ export const SetupStartupPage = () => {
                   placeholder="Select sector"
                   onChange={(event) => set('sector', event.target.value)}
                   required
+                  {...fields.a11y('sector', 'startup-sector')}
                 />
+                {fields.message('sector') && (
+                  <FieldError id={fields.errorId('startup-sector')}>{fields.message('sector')}</FieldError>
+                )}
               </div>
               <div>
                 <Label htmlFor="startup-stage" required>
@@ -121,7 +132,11 @@ export const SetupStartupPage = () => {
                   placeholder="Select stage"
                   onChange={(event) => set('stage', event.target.value)}
                   required
+                  {...fields.a11y('stage', 'startup-stage')}
                 />
+                {fields.message('stage') && (
+                  <FieldError id={fields.errorId('startup-stage')}>{fields.message('stage')}</FieldError>
+                )}
               </div>
             </div>
 
@@ -143,7 +158,11 @@ export const SetupStartupPage = () => {
                   value={form.foundedYear}
                   onChange={(event) => set('foundedYear', event.target.value)}
                   placeholder="2023"
+                  {...fields.a11y('foundedYear', 'startup-founded')}
                 />
+                {fields.message('foundedYear') && (
+                  <FieldError id={fields.errorId('startup-founded')}>{fields.message('foundedYear')}</FieldError>
+                )}
               </div>
               <div>
                 <Label htmlFor="startup-team">Team size</Label>
@@ -154,7 +173,11 @@ export const SetupStartupPage = () => {
                   value={form.teamSize}
                   onChange={(event) => set('teamSize', event.target.value)}
                   placeholder="12"
+                  {...fields.a11y('teamSize', 'startup-team')}
                 />
+                {fields.message('teamSize') && (
+                  <FieldError id={fields.errorId('startup-team')}>{fields.message('teamSize')}</FieldError>
+                )}
               </div>
             </div>
 
@@ -167,7 +190,11 @@ export const SetupStartupPage = () => {
                   min="0"
                   value={form.annualRevenue}
                   onChange={(event) => set('annualRevenue', event.target.value)}
+                  {...fields.a11y('annualRevenue', 'startup-revenue')}
                 />
+                {fields.message('annualRevenue') && (
+                  <FieldError id={fields.errorId('startup-revenue')}>{fields.message('annualRevenue')}</FieldError>
+                )}
               </div>
               <div>
                 <Label htmlFor="startup-website">Website</Label>
@@ -177,7 +204,11 @@ export const SetupStartupPage = () => {
                   value={form.website}
                   onChange={(event) => set('website', event.target.value)}
                   placeholder="https://"
+                  {...fields.a11y('website', 'startup-website')}
                 />
+                {fields.message('website') && (
+                  <FieldError id={fields.errorId('startup-website')}>{fields.message('website')}</FieldError>
+                )}
               </div>
             </div>
 
@@ -189,10 +220,16 @@ export const SetupStartupPage = () => {
                 value={form.pitchDeckUrl}
                 onChange={(event) => set('pitchDeckUrl', event.target.value)}
                 placeholder="https://"
+                {...fields.a11y('pitchDeckUrl', 'startup-deck')}
               />
+              {fields.message('pitchDeckUrl') && (
+                <FieldError id={fields.errorId('startup-deck')}>{fields.message('pitchDeckUrl')}</FieldError>
+              )}
             </div>
 
-            {mutation.isError && <Alert variant="danger">{errorMessage(mutation.error)}</Alert>}
+            {mutation.isError && (
+              <Alert variant="danger">{fields.summary((error) => errorMessage(error))}</Alert>
+            )}
 
             <Button
               type="submit"

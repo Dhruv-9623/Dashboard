@@ -14,7 +14,7 @@ import { Alert } from '@/components/ui/Alert'
 import { Skeleton, SkeletonRows } from '@/components/ui/Skeleton'
 import { PulseIcon, SparkIcon, WarningIcon } from '@/components/icons'
 import { cn } from '@/lib/utils'
-import { formatDate, formatDateTime } from '@/lib/constants'
+import { formatDate, formatDateTime, pluralize } from '@/lib/constants'
 
 const severityVariants: Record<AlertSeverity, 'secondary' | 'warning' | 'danger'> = {
   [AlertSeverity.INFO]: 'secondary',
@@ -23,25 +23,25 @@ const severityVariants: Record<AlertSeverity, 'secondary' | 'warning' | 'danger'
 }
 
 const AlertRow = ({ alert }: { alert: DigestAlertDTO }) => (
-  <li className="flex items-start gap-3 rounded-lg border border-gray-200 p-3">
+  <li className="flex items-start gap-3 rounded-lg border border-line p-3">
     <WarningIcon
       className={cn(
         'mt-0.5 h-4 w-4 shrink-0',
         alert.severity === AlertSeverity.CRITICAL
-          ? 'text-red-500'
+          ? 'text-negative'
           : alert.severity === AlertSeverity.WARNING
-            ? 'text-amber-500'
-            : 'text-gray-400'
+            ? 'text-notice'
+            : 'text-ink-muted'
       )}
     />
     <div className="min-w-0">
       <div className="flex flex-wrap items-center gap-2">
         {alert.startupName && (
-          <span className="text-sm font-medium text-gray-900">{alert.startupName}</span>
+          <span className="text-sm font-medium text-ink">{alert.startupName}</span>
         )}
         <Badge variant={severityVariants[alert.severity]}>{severityLabels[alert.severity]}</Badge>
       </div>
-      <p className="mt-1 text-sm text-gray-700">{alert.message}</p>
+      <p className="mt-1 text-sm text-ink-secondary">{alert.message}</p>
     </div>
   </li>
 )
@@ -105,7 +105,7 @@ export const PulsePage = () => {
         <div className="grid gap-5 lg:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
           <Card className="h-fit">
             <CardContent className="py-4">
-              <h2 className="mb-3 text-sm font-semibold text-gray-900">Digests</h2>
+              <h2 className="mb-3 text-sm font-semibold text-ink">Digests</h2>
               <ul className="space-y-1">
                 {list.map((digest) => (
                   <li key={digest.id}>
@@ -115,15 +115,17 @@ export const PulsePage = () => {
                       className={cn(
                         'w-full rounded px-3 py-2 text-left transition-colors',
                         selected?.id === digest.id
-                          ? 'bg-blue-50 text-blue-900'
-                          : 'text-gray-700 hover:bg-gray-50'
+                          ? 'bg-brand-subtle text-brand-ink'
+                          : 'text-ink-secondary hover:bg-surface-sunken'
                       )}
                     >
                       <span className="block text-sm font-medium">
                         {formatDate(digest.periodEnd)}
                       </span>
-                      <span className="block text-xs text-gray-500">
-                        {digest.companyCount} companies · {digest.alerts.length} alerts
+                      {/* gray-600: gray-500 drops to 4.44:1 on the selected row's blue-50 background. */}
+                      <span className="block text-xs text-ink-secondary">
+                        {pluralize(digest.companyCount, 'company', 'companies')} ·{' '}
+                        {pluralize(digest.alerts.length, 'alert')}
                       </span>
                     </button>
                   </li>
@@ -138,11 +140,11 @@ export const PulsePage = () => {
             <div className="space-y-5">
               <Card>
                 <CardContent className="py-5">
-                  <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-gray-100 pb-4">
-                    <h2 className="text-base font-semibold text-gray-900">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-4">
+                    <h2 className="text-base font-semibold text-ink">
                       {formatDate(selected.periodStart)} – {formatDate(selected.periodEnd)}
                     </h2>
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-ink-muted">
                       {selected.sentAt
                         ? `Emailed ${formatDateTime(selected.sentAt)}`
                         : 'Not emailed'}
@@ -155,7 +157,7 @@ export const PulsePage = () => {
               {selected.alerts.length > 0 && (
                 <Card>
                   <CardContent className="py-5">
-                    <h2 className="mb-3 text-sm font-semibold text-gray-900">
+                    <h2 className="mb-3 text-sm font-semibold text-ink">
                       Alerts ({selected.alerts.length})
                     </h2>
                     <ul className="space-y-2">

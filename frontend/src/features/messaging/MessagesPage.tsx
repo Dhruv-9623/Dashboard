@@ -7,7 +7,7 @@ import { useAuth } from '@/features/auth/useAuth'
 import { PageHeader } from '@/components/PageHeader'
 import { Avatar } from '@/components/Avatar'
 import { EmptyState } from '@/components/EmptyState'
-import { ErrorState } from '@/components/ErrorState'
+import { ErrorState, errorMessage } from '@/components/ErrorState'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -71,18 +71,18 @@ const ConnectionRequests = () => {
                   <Avatar name={other.displayName} logoUrl={other.logoUrl} />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium text-gray-900">{other.displayName}</span>
+                      <span className="font-medium text-ink">{other.displayName}</span>
                       {other.entityName && (
-                        <span className="text-sm text-gray-500">· {other.entityName}</span>
+                        <span className="text-sm text-ink-muted">· {other.entityName}</span>
                       )}
                       <Badge variant={connectionStatusVariants[request.status]}>
                         {connectionStatusLabels[request.status]}
                       </Badge>
                     </div>
                     {request.message && (
-                      <p className="mt-1.5 text-sm text-gray-700">{request.message}</p>
+                      <p className="mt-1.5 text-sm text-ink-secondary">{request.message}</p>
                     )}
-                    <p className="mt-1 text-xs text-gray-500">
+                    <p className="mt-1 text-xs text-ink-muted">
                       {formatDateTime(request.requestedAt)}
                     </p>
                   </div>
@@ -144,21 +144,33 @@ const Thread = ({ conversation }: { conversation: ConversationDTO }) => {
   })
 
   const messages = query.data ?? []
+  const hasUnread = conversation.unreadCount > 0
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' })
   }, [messages.length])
 
+  // Opening a thread clears its unread badge.
+  useEffect(() => {
+    if (!hasUnread || !query.isSuccess) return
+    messagingApi
+      .markRead(conversation.id)
+      .then(() => queryClient.invalidateQueries({ queryKey: messagingKeys.conversations }))
+      .catch(() => {
+        // Non-critical: the badge simply stays until the next successful attempt.
+      })
+  }, [conversation.id, hasUnread, query.isSuccess, queryClient])
+
   return (
     <Card className="flex h-[32rem] flex-col">
-      <div className="flex items-center gap-3 border-b border-gray-200 px-5 py-3">
+      <div className="flex items-center gap-3 border-b border-line px-5 py-3">
         <Avatar name={conversation.counterparty.displayName} logoUrl={conversation.counterparty.logoUrl} size="sm" />
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-gray-900">
+          <p className="truncate text-sm font-semibold text-ink">
             {conversation.counterparty.displayName}
           </p>
           {conversation.counterparty.entityName && (
-            <p className="truncate text-xs text-gray-500">
+            <p className="truncate text-xs text-ink-muted">
               {conversation.counterparty.entityName}
             </p>
           )}
@@ -168,8 +180,14 @@ const Thread = ({ conversation }: { conversation: ConversationDTO }) => {
       <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
         {query.isLoading ? (
           <SkeletonRows rows={3} />
+        ) : query.isError ? (
+          <ErrorState
+            title="Couldn't load this conversation"
+            error={query.error}
+            onRetry={() => query.refetch()}
+          />
         ) : messages.length === 0 ? (
-          <p className="py-8 text-center text-sm text-gray-500">
+          <p className="py-8 text-center text-sm text-ink-muted">
             No messages yet — say hello.
           </p>
         ) : (
@@ -181,11 +199,11 @@ const Thread = ({ conversation }: { conversation: ConversationDTO }) => {
                 <div
                   className={cn(
                     'max-w-[75%] rounded-lg px-3.5 py-2',
-                    mine ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'
+                    mine ? 'bg-brand text-white' : 'bg-surface-hover text-ink'
                   )}
                 >
                   <p className="whitespace-pre-wrap text-sm">{message.body}</p>
-                  <p className={cn('mt-1 text-[11px]', mine ? 'text-blue-100' : 'text-gray-500')}>
+                  <p className={cn('mt-1 text-xs', mine ? 'text-[color-mix(in_oklab,white_82%,var(--brand))]' : 'text-ink-secondary')}>
                     {formatDateTime(message.sentAt)}
                   </p>
                 </div>
@@ -196,20 +214,27 @@ const Thread = ({ conversation }: { conversation: ConversationDTO }) => {
         <div ref={bottomRef} />
       </div>
 
+      {send.isError && (
+        <p role="alert" className="border-t border-[color-mix(in_oklab,var(--negative)_25%,transparent)] bg-negative-subtle px-5 py-2 text-sm text-negative">
+          Message not sent: {errorMessage(send.error)}
+        </p>
+      )}
+
       <form
         onSubmit={(event) => {
           event.preventDefault()
           if (draft.trim()) send.mutate(draft.trim())
         }}
-        className="flex gap-2 border-t border-gray-200 px-5 py-3"
+        className="flex gap-2 border-t border-line px-5 py-3"
       >
         <Input
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           placeholder="Write a message…"
+          aria-label={`Message ${conversation.counterparty.displayName}`}
         />
-        <Button type="submit" disabled={!draft.trim() || send.isPending}>
-          <SendIcon className="h-4 w-4" />
+        <Button type="submit" aria-label="Send message" disabled={!draft.trim() || send.isPending}>
+          <SendIcon className="h-4 w-4" aria-hidden="true" />
         </Button>
       </form>
     </Card>
@@ -241,7 +266,9 @@ const Conversations = () => {
   }
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,280px)_minmax(0,1fr)]">
+    // grid-cols-1 = minmax(0,1fr): without it the implicit column grows to the widest message and
+    // pushes the page wider than a phone screen.
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,280px)_minmax(0,1fr)]">
       <Card className="h-fit">
         <CardContent className="py-3">
           <ul className="space-y-1">
@@ -252,7 +279,7 @@ const Conversations = () => {
                   onClick={() => setSelectedId(conversation.id)}
                   className={cn(
                     'flex w-full items-center gap-3 rounded px-3 py-2 text-left transition-colors',
-                    selected?.id === conversation.id ? 'bg-blue-50' : 'hover:bg-gray-50'
+                    selected?.id === conversation.id ? 'bg-brand-subtle' : 'hover:bg-surface-sunken'
                   )}
                 >
                   <Avatar
@@ -261,11 +288,11 @@ const Conversations = () => {
                     size="sm"
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-gray-900">
+                    <p className="truncate text-sm font-medium text-ink">
                       {conversation.counterparty.displayName}
                     </p>
                     {conversation.lastMessagePreview && (
-                      <p className="truncate text-xs text-gray-500">
+                      <p className="truncate text-xs text-ink-secondary">
                         {conversation.lastMessagePreview}
                       </p>
                     )}

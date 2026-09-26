@@ -192,16 +192,16 @@ export const OutreachPage = () => {
             <TableBody>
               {messages.map((message) => (
                 <TableRow key={message.id}>
-                  <TableCell className="font-medium text-gray-900">
+                  <TableCell className="font-medium text-ink">
                     {message.toStartupName}
                   </TableCell>
                   <TableCell>
-                    <span className="text-gray-900">{message.subject}</span>
-                    <span className="mt-0.5 block max-w-md truncate text-xs text-gray-500">
+                    <span className="text-ink">{message.subject}</span>
+                    <span className="mt-0.5 block max-w-md truncate text-xs text-ink-muted">
                       {message.body}
                     </span>
                   </TableCell>
-                  <TableCell className="text-sm text-gray-600">
+                  <TableCell className="text-sm text-ink-secondary">
                     {formatDate(message.sentAt)}
                   </TableCell>
                   <TableCell>

@@ -5,12 +5,14 @@ import com.VentureCapitals.Dashboard.common.exception.EntityNotFoundException;
 import com.VentureCapitals.Dashboard.common.exception.UnauthorizedException;
 import com.VentureCapitals.Dashboard.domain.user.User;
 import com.VentureCapitals.Dashboard.domain.user.UserRepository;
+import com.VentureCapitals.Dashboard.domain.user.UserType;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
@@ -20,16 +22,18 @@ public class VCFirmService {
     private final VCFirmRepository vcFirmRepository;
     private final VCMemberRepository vcMemberRepository;
     private final UserRepository userRepository;
+    private final FirmAccessPolicy accessPolicy;
 
     public VCFirmService(VCFirmRepository vcFirmRepository, VCMemberRepository vcMemberRepository,
-                         UserRepository userRepository) {
+                         UserRepository userRepository, FirmAccessPolicy accessPolicy) {
         this.vcFirmRepository = vcFirmRepository;
         this.vcMemberRepository = vcMemberRepository;
         this.userRepository = userRepository;
+        this.accessPolicy = accessPolicy;
     }
 
     public VCFirm createFirm(User owner, CreateVCFirmRequest request) {
-        validateOwnerHasNoFirm(owner.getId());
+        validateUserHasNoFirm(owner.getId());
 
         VCFirm firm = VCFirm.builder()
                 .name(request.getName())
@@ -61,7 +65,7 @@ public class VCFirmService {
         VCFirm firm = vcFirmRepository.findById(firmId)
                 .orElseThrow(() -> new EntityNotFoundException("VC Firm not found: " + firmId));
 
-        verifyActorIsOwner(firmId, actor.getId());
+        accessPolicy.requireOwner(actor, firmId);
 
         firm.setName(request.getName());
         firm.setDescription(request.getDescription());
@@ -78,14 +82,23 @@ public class VCFirmService {
         return updated;
     }
 
-    public void addMember(UUID firmId, User actor, AddMemberRequest request) {
+    public VCMember addMember(UUID firmId, User actor, AddMemberRequest request) {
         VCFirm firm = vcFirmRepository.findById(firmId)
                 .orElseThrow(() -> new EntityNotFoundException("VC Firm not found: " + firmId));
 
-        verifyActorIsOwner(firmId, actor.getId());
+        accessPolicy.requireOwner(actor, firmId);
 
-        User targetUser = userRepository.findById(request.getUserId())
-                .orElseThrow(() -> new EntityNotFoundException("User not found: " + request.getUserId()));
+        if (request.getRole() == VCRole.OWNER) {
+            // The schema allows exactly one owner per firm (uq_vc_firm_single_owner).
+            throw new BusinessRuleViolationException("A firm has a single owner. Invite teammates as Portfolio Manager or Staff");
+        }
+
+        User targetUser = userRepository.findByEmail(request.getEmail().trim())
+                .orElseThrow(() -> new EntityNotFoundException("No account found for that email. Ask them to sign up first"));
+
+        if (targetUser.getUserType() != UserType.VC) {
+            throw new BusinessRuleViolationException("Only VC accounts can join a firm");
+        }
 
         validateUserHasNoFirm(targetUser.getId());
 
@@ -96,15 +109,16 @@ public class VCFirmService {
                 .joinedAt(Instant.now())
                 .build();
 
-        vcMemberRepository.save(member);
-        log.info("Member added to firm: firmId={}, userId={}, role={}", firmId, request.getUserId(), request.getRole());
+        VCMember saved = vcMemberRepository.save(member);
+        log.info("Member added to firm: firmId={}, userId={}, role={}", firmId, targetUser.getId(), request.getRole());
+        return saved;
     }
 
     public void removeMember(UUID firmId, User actor, UUID memberId) {
         VCFirm firm = vcFirmRepository.findById(firmId)
                 .orElseThrow(() -> new EntityNotFoundException("VC Firm not found: " + firmId));
 
-        verifyActorIsOwner(firmId, actor.getId());
+        accessPolicy.requireOwner(actor, firmId);
 
         VCMember member = vcMemberRepository.findById(memberId)
                 .orElseThrow(() -> new EntityNotFoundException("Member not found: " + memberId));
@@ -121,11 +135,11 @@ public class VCFirmService {
         log.info("Member removed from firm: firmId={}, memberId={}", firmId, memberId);
     }
 
-    public void changeMemberRole(UUID firmId, User actor, UUID memberId, VCRole newRole) {
-        VCFirm firm = vcFirmRepository.findById(firmId)
+    public VCMember changeMemberRole(UUID firmId, User actor, UUID memberId, VCRole newRole) {
+        vcFirmRepository.findById(firmId)
                 .orElseThrow(() -> new EntityNotFoundException("VC Firm not found: " + firmId));
 
-        verifyActorIsOwner(firmId, actor.getId());
+        accessPolicy.requireOwner(actor, firmId);
 
         VCMember member = vcMemberRepository.findById(memberId)
                 .orElseThrow(() -> new EntityNotFoundException("Member not found: " + memberId));
@@ -134,56 +148,46 @@ public class VCFirmService {
             throw new UnauthorizedException("Member does not belong to this firm");
         }
 
+        // The schema allows exactly one owner per firm, so ownership can't be granted or removed
+        // through a role change. An explicit transfer-ownership operation is still to be designed.
+        if (newRole == VCRole.OWNER && member.getRole() != VCRole.OWNER) {
+            throw new BusinessRuleViolationException("Ownership transfer isn't supported yet");
+        }
         if (member.getRole() == VCRole.OWNER && newRole != VCRole.OWNER) {
-            VCMember anotherOwner = vcMemberRepository.findOwnerByFirmId(firmId)
-                    .filter(m -> !m.getId().equals(memberId))
-                    .orElse(null);
-
-            if (anotherOwner == null) {
-                throw new BusinessRuleViolationException("Cannot demote the sole owner without promoting another member");
-            }
+            throw new BusinessRuleViolationException("The firm owner's role can't be changed");
         }
 
         member.setRole(newRole);
-        vcMemberRepository.save(member);
+        VCMember saved = vcMemberRepository.save(member);
         log.info("Member role changed: firmId={}, memberId={}, newRole={}", firmId, memberId, newRole);
+        return saved;
     }
 
+    /** Public firm profile. */
     @Transactional(readOnly = true)
     public VCFirm getFirm(UUID firmId) {
         return vcFirmRepository.findById(firmId)
                 .orElseThrow(() -> new EntityNotFoundException("VC Firm not found: " + firmId));
     }
 
+    /** Investor discovery by name; all firms when the search is blank. Capped to keep responses small. */
     @Transactional(readOnly = true)
-    public List<VCMember> getFirmMembers(UUID firmId) {
+    public List<VCFirm> searchFirms(String search) {
+        String term = search == null ? "" : search.trim();
+        return vcFirmRepository.findTop50ByNameContainingIgnoreCaseOrderByNameAsc(term);
+    }
+
+    /** The firm's members, if the actor is one of them. */
+    @Transactional(readOnly = true)
+    public List<VCMember> getFirmMembers(User actor, UUID firmId) {
+        accessPolicy.requireMember(actor, firmId);
         return vcMemberRepository.findByFirmId(firmId);
     }
 
+    /** The firm the user belongs to, if any — empty before firm setup. */
     @Transactional(readOnly = true)
-    public VCMember getUserFirmMembership(UUID userId) {
-        return vcMemberRepository.findByUserId(userId)
-                .orElseThrow(() -> new EntityNotFoundException("User has no firm membership: " + userId));
-    }
-
-    private void verifyActorIsOwner(UUID firmId, UUID actorId) {
-        VCMember actor = vcMemberRepository.findByUserId(actorId)
-                .orElseThrow(() -> new UnauthorizedException("User is not a member of any firm"));
-
-        if (!actor.getFirm().getId().equals(firmId)) {
-            throw new UnauthorizedException("User does not belong to this firm");
-        }
-
-        if (actor.getRole() != VCRole.OWNER) {
-            throw new UnauthorizedException("Only firm owner can perform this action");
-        }
-    }
-
-    private void validateOwnerHasNoFirm(UUID userId) {
-        vcMemberRepository.findByUserId(userId)
-                .ifPresent(member -> {
-                    throw new BusinessRuleViolationException("User already belongs to a firm");
-                });
+    public Optional<VCFirm> findFirmForUser(UUID userId) {
+        return vcMemberRepository.findByUserId(userId).map(VCMember::getFirm);
     }
 
     private void validateUserHasNoFirm(UUID userId) {

@@ -1,25 +1,28 @@
 package com.VentureCapitals.Dashboard.domain.user;
 
 import com.VentureCapitals.Dashboard.common.exception.EntityNotFoundException;
+import com.VentureCapitals.Dashboard.common.exception.UnauthorizedException;
 import com.VentureCapitals.Dashboard.common.exception.ValidationException;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
 @Service
 @Transactional
 public class UserService {
-    private final UserRepository userRepository;
-    @Autowired
-    private PasswordEncoder passwordEncoder;
+    private static final String INVALID_CREDENTIALS = "Invalid email or password";
 
-    public UserService(UserRepository userRepository) {
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     public User findOrCreateFromOAuth(String oauthProvider, String oauthId, String email) {
@@ -33,7 +36,7 @@ public class UserService {
                             .isActive(true)
                             .build();
                     User saved = userRepository.save(newUser);
-                    log.info("Created new OAuth user: email={}, provider={}", email, oauthProvider);
+                    log.info("Created new OAuth user: userId={}, provider={}", saved.getId(), oauthProvider);
                     return saved;
                 });
     }
@@ -61,7 +64,7 @@ public class UserService {
     @Transactional(readOnly = true)
     public User findByEmail(String email) {
         return userRepository.findByEmail(email)
-                .orElseThrow(() -> new EntityNotFoundException("User not found: " + email));
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
     }
 
     public User registerWithEmailPassword(String email, String password) {
@@ -76,19 +79,36 @@ public class UserService {
                 .isActive(true)
                 .build();
         User saved = userRepository.save(newUser);
-        log.info("Created new email/password user: email={}", email);
+        log.info("Created new email/password user: userId={}", saved.getId());
         return saved;
     }
 
+    /**
+     * Unknown email and wrong password produce the same error and status, and both run a bcrypt
+     * comparison, so the endpoint doesn't reveal which emails are registered.
+     */
     @Transactional(readOnly = true)
     public User authenticateWithEmailPassword(String email, String password) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new EntityNotFoundException("Invalid email or password"));
+        Optional<User> found = userRepository.findByEmail(email);
+        String hash = found.map(User::getPasswordHash).orElse(null);
 
-        if (user.getPasswordHash() == null || !passwordEncoder.matches(password, user.getPasswordHash())) {
-            throw new ValidationException("Invalid email or password");
+        boolean matches = hash != null
+                ? passwordEncoder.matches(password, hash)
+                : burnPasswordCheck(password);
+
+        if (found.isEmpty() || !matches) {
+            throw new ValidationException(INVALID_CREDENTIALS);
         }
 
+        User user = found.get();
+        if (!user.isActive()) {
+            throw new UnauthorizedException("This account has been deactivated");
+        }
         return user;
+    }
+
+    private boolean burnPasswordCheck(String password) {
+        passwordEncoder.matches(password, passwordEncoder.encode("timing-equaliser"));
+        return false;
     }
 }

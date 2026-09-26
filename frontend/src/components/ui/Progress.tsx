@@ -8,11 +8,11 @@ interface ProgressProps {
 }
 
 const tones = {
-  blue: 'bg-blue-600',
-  green: 'bg-green-600',
-  amber: 'bg-amber-500',
-  red: 'bg-red-600',
-  gray: 'bg-gray-400',
+  blue: 'bg-brand',
+  green: 'bg-positive',
+  amber: 'bg-notice',
+  red: 'bg-negative',
+  gray: 'bg-line-strong',
 }
 
 export const Progress = ({ value, tone = 'blue', className }: ProgressProps) => {
@@ -24,7 +24,7 @@ export const Progress = ({ value, tone = 'blue', className }: ProgressProps) => 
       aria-valuenow={Math.round(clamped)}
       aria-valuemin={0}
       aria-valuemax={100}
-      className={cn('h-2 w-full overflow-hidden rounded-full bg-gray-200', className)}
+      className={cn('h-2 w-full overflow-hidden rounded-full bg-surface-hover', className)}
     >
       <div
         className={cn('h-full rounded-full transition-all duration-500', tones[tone])}

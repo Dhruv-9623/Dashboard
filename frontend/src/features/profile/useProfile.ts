@@ -5,6 +5,7 @@ import { vcFirmApi } from '@/features/vc-firm/api'
 import { startupApi } from '@/features/startup/api'
 import type { VCFirmDTO } from '@/features/vc-firm/types'
 import type { StartupDTO } from '@/features/startup/types'
+import { stageLabel } from '@/lib/constants'
 
 export const profileKeys = {
   mine: ['profile', 'me'] as const,
@@ -38,7 +39,7 @@ export const useProfile = () => {
     displayName: entity?.name ?? (isStartup ? 'Your startup' : 'Your firm'),
     logoUrl: startup?.logoUrl ?? null,
     subtitle: startup
-      ? `${startup.sector} · ${startup.stage}`
+      ? `${startup.sector} · ${stageLabel(startup.stage)}`
       : firm?.location ?? '',
     needsSetup: Boolean(user?.userType) && !query.isLoading && !query.isError && !entity,
     isLoading: query.isLoading,

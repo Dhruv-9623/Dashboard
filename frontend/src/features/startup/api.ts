@@ -1,4 +1,5 @@
-import { fetchApi } from '@/lib/api-client'
+import { fetchApi, withQuery } from '@/lib/api-client'
+import type { PageParams, PageResponse } from '@/lib/api-client'
 import type {
   StartupDTO,
   StartupMemberDTO,
@@ -7,19 +8,10 @@ import type {
   UpsertStartupRequest,
 } from './types'
 
-const toQuery = (params: StartupSearchParams) => {
-  const query = new URLSearchParams()
-  if (params.search) query.set('search', params.search)
-  if (params.sector) query.set('sector', params.sector)
-  if (params.stage) query.set('stage', params.stage)
-  if (params.raisingOnly) query.set('raisingOnly', 'true')
-  const encoded = query.toString()
-  return encoded ? `?${encoded}` : ''
-}
-
 export const startupApi = {
-  search: (params: StartupSearchParams = {}) =>
-    fetchApi<StartupDTO[]>(`/api/startups${toQuery(params)}`),
+  /** Discovery, paged and alphabetical. */
+  search: (params: StartupSearchParams & PageParams = {}) =>
+    fetchApi<PageResponse<StartupDTO>>(withQuery('/api/startups', { ...params })),
 
   get: (id: string) => fetchApi<StartupDTO>(`/api/startups/${id}`),
 
@@ -53,7 +45,7 @@ export const startupApi = {
 export const startupKeys = {
   all: ['startups'] as const,
   mine: ['startups', 'me'] as const,
-  search: (params: StartupSearchParams) => ['startups', 'search', params] as const,
+  search: (params: StartupSearchParams & PageParams) => ['startups', 'search', params] as const,
   detail: (id: string) => ['startups', 'detail', id] as const,
   members: (id: string) => ['startups', id, 'members'] as const,
 }

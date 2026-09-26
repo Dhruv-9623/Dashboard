@@ -50,6 +50,52 @@ export const formatMoney = (amount: number | null | undefined, currency = 'INR')
   return `${symbol}${amount.toLocaleString('en-IN')}`
 }
 
+/**
+ * Money at axis-tick size: magnitude only, no decimals, so it fits a narrow
+ * gutter without wrapping. The tooltip and the figures carry the precision.
+ */
+export const formatMoneyShort = (amount: number, currency = 'INR') => {
+  const symbol = currency === 'INR' ? '₹' : currency === 'USD' ? '$' : ''
+  if (currency === 'INR') {
+    if (amount >= 10_000_000) return `${symbol}${Math.round(amount / 10_000_000)}Cr`
+    if (amount >= 100_000) return `${symbol}${Math.round(amount / 100_000)}L`
+    if (amount >= 1_000) return `${symbol}${Math.round(amount / 1_000)}k`
+  } else if (amount >= 1_000_000) {
+    return `${symbol}${Math.round(amount / 1_000_000)}M`
+  } else if (amount >= 1_000) {
+    return `${symbol}${Math.round(amount / 1_000)}k`
+  }
+  return `${symbol}${Math.round(amount)}`
+}
+
+/**
+ * Totals money per currency instead of adding INR and USD together.
+ * Returns e.g. "₹35.00 Cr" or "₹35.00 Cr + $2.00M".
+ */
+export const formatMoneyTotals = (
+  items: ReadonlyArray<{ amount: number; currency: string }>,
+  emptyCurrency = 'INR'
+) => {
+  if (items.length === 0) return formatMoney(0, emptyCurrency)
+
+  const totals: Record<string, number> = {}
+  for (const { amount, currency } of items) {
+    totals[currency] = (totals[currency] ?? 0) + amount
+  }
+  return formatCurrencyTotals(totals, emptyCurrency)
+}
+
+/** Formats server-computed per-currency totals, e.g. `{ INR: 350000000, USD: 2000000 }`. */
+export const formatCurrencyTotals = (totals: Record<string, number>, emptyCurrency = 'INR') => {
+  const entries = Object.entries(totals)
+  if (entries.length === 0) return formatMoney(0, emptyCurrency)
+  return entries.map(([currency, total]) => formatMoney(total, currency)).join(' + ')
+}
+
+/** `pluralize(1, 'request')` → "1 request", `pluralize(3, 'match', 'matches')` → "3 matches". */
+export const pluralize = (count: number, singular: string, plural = `${singular}s`) =>
+  `${count} ${count === 1 ? singular : plural}`
+
 export const formatDate = (iso: string | null | undefined) => {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString(undefined, {

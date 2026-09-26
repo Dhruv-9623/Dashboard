@@ -13,10 +13,11 @@ const dimensions = {
   lg: { box: 112, stroke: 8, text: 'text-3xl' },
 }
 
+// Text tones use the 700 steps: the 600 steps measured 3.2:1 on white and fail AA at small sizes.
 export const scoreBand = (score: number) => {
-  if (score >= 75) return { tone: 'text-green-600', ring: 'stroke-green-500', label: 'Strong fit' }
-  if (score >= 50) return { tone: 'text-amber-600', ring: 'stroke-amber-500', label: 'Partial fit' }
-  return { tone: 'text-red-600', ring: 'stroke-red-500', label: 'Weak fit' }
+  if (score >= 75) return { tone: 'text-positive', ring: 'stroke-green-500', label: 'Strong fit' }
+  if (score >= 50) return { tone: 'text-notice', ring: 'stroke-amber-500', label: 'Partial fit' }
+  return { tone: 'text-negative', ring: 'stroke-red-500', label: 'Weak fit' }
 }
 
 export const ScoreDial = ({ score, size = 'md', className }: ScoreDialProps) => {
@@ -54,7 +55,7 @@ export const ScoreDial = ({ score, size = 'md', className }: ScoreDialProps) => 
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
         {pending ? (
-          <span className="text-xs font-medium text-gray-400">···</span>
+          <span className="text-xs font-medium text-ink-muted">···</span>
         ) : (
           <span className={cn('font-semibold tabular-nums', text, band?.tone)}>{Math.round(score)}</span>
         )}
