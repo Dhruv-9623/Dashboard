@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
+import { safeUrl } from '@/lib/utils'
 import { signalApi, signalKeys } from './api'
 import { SignalType, sentimentLabels, sentimentVariants, signalTypeLabels } from './types'
 import { PageHeader } from '@/components/PageHeader'
@@ -74,23 +75,23 @@ export const SignalsPage = () => {
                       {sentimentLabels[signal.sentiment]}
                     </Badge>
                     {signal.aiGenerated && (
-                      <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                      <span className="inline-flex items-center gap-1 text-xs text-ink-muted">
                         <SparkIcon className="h-3.5 w-3.5" />
                         AI summary
                       </span>
                     )}
-                    <span className="ml-auto text-xs text-gray-500">
+                    <span className="ml-auto text-xs text-ink-muted">
                       {formatDate(signal.publishedAt)}
                     </span>
                   </div>
 
-                  <h2 className="mt-2 text-base font-semibold text-gray-900">
-                    {signal.sourceUrl ? (
+                  <h2 className="mt-2 text-base font-semibold text-ink">
+                    {safeUrl(signal.sourceUrl) ? (
                       <a
-                        href={signal.sourceUrl}
+                        href={safeUrl(signal.sourceUrl)}
                         target="_blank"
                         rel="noreferrer noopener"
-                        className="hover:text-blue-700 hover:underline"
+                        className="hover:text-brand-ink hover:underline"
                       >
                         {signal.headline}
                       </a>
@@ -100,13 +101,13 @@ export const SignalsPage = () => {
                   </h2>
 
                   {signal.summary && (
-                    <p className="mt-1.5 text-sm leading-relaxed text-gray-600">{signal.summary}</p>
+                    <p className="mt-1.5 text-sm leading-relaxed text-ink-secondary">{signal.summary}</p>
                   )}
 
                   {subjectHref && subjectName && (
                     <Link
                       to={subjectHref}
-                      className="mt-2 inline-block text-sm text-blue-600 hover:underline"
+                      className="mt-2 inline-block text-sm text-brand-ink hover:underline"
                     >
                       {subjectName}
                     </Link>

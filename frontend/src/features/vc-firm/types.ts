@@ -4,6 +4,12 @@ export enum VCRole {
   STAFF = 'STAFF',
 }
 
+export const vcRoleLabels: Record<VCRole, string> = {
+  [VCRole.OWNER]: 'Owner',
+  [VCRole.PORTFOLIO_MANAGER]: 'Portfolio Manager',
+  [VCRole.STAFF]: 'Staff',
+}
+
 export enum PlanTier {
   FREE = 'FREE',
   STARTER = 'STARTER',
@@ -79,6 +85,8 @@ export interface UpdateVCFirmRequest {
   foundedYear?: number
 }
 
+/** Teammates are invited by email and must already have a VC account. OWNER can't be granted here. */
 export interface AddMemberRequest {
-  userId: string
+  email: string
+  role: Exclude<VCRole, VCRole.OWNER>
 }

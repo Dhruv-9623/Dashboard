@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/features/auth/useAuth'
 import { UserType } from '@/features/auth/types'
@@ -17,23 +17,31 @@ import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { SkeletonRows } from '@/components/ui/Skeleton'
+import { Pagination } from '@/components/ui/Pagination'
 import { HeartIcon, ScaleIcon, SearchIcon } from '@/components/icons'
 import { cn } from '@/lib/utils'
+import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import { sectorOptions, stageLabel, STAGES } from '@/lib/constants'
+
+const PAGE_SIZE = 12
 
 const StartupDiscovery = () => {
   const [search, setSearch] = useState('')
   const [sector, setSector] = useState('')
   const [stage, setStage] = useState('')
   const [raisingOnly, setRaisingOnly] = useState(false)
+  const [page, setPage] = useState(0)
   const [selected, setSelected] = useState<string[]>([])
   const navigate = useNavigate()
 
-  const params = { search, sector, stage, raisingOnly }
+  // Debounced so typing doesn't fire one request per keystroke.
+  const debouncedSearch = useDebouncedValue(search.trim())
+  const params = { search: debouncedSearch, sector, stage, raisingOnly, page, size: PAGE_SIZE }
 
   const query = useQuery({
     queryKey: startupKeys.search(params),
     queryFn: () => startupApi.search(params),
+    placeholderData: keepPreviousData,
   })
 
   const { isSaved, toggle: toggleWishlist } = useWishlistToggle(WishlistTargetType.STARTUP)
@@ -43,7 +51,7 @@ const StartupDiscovery = () => {
       prev.includes(id) ? prev.filter((entry) => entry !== id) : [...prev, id]
     )
 
-  const startups = query.data ?? []
+  const startups = query.data?.items ?? []
 
   return (
     <>
@@ -64,30 +72,46 @@ const StartupDiscovery = () => {
         <div className="min-w-[220px] flex-1">
           <Input
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => {
+              setSearch(event.target.value)
+              setPage(0)
+            }}
             placeholder="Search by name…"
+            aria-label="Search startups by name"
           />
         </div>
         <div className="w-44">
           <Select
+            aria-label="Filter by sector"
             options={[{ value: '', label: 'All sectors' }, ...sectorOptions]}
             value={sector}
-            onChange={(event) => setSector(event.target.value)}
+            onChange={(event) => {
+              setSector(event.target.value)
+              setPage(0)
+            }}
           />
         </div>
         <div className="w-44">
           <Select
+            aria-label="Filter by stage"
             options={[
               { value: '', label: 'All stages' },
               ...STAGES.map((entry) => ({ value: entry.value, label: entry.label })),
             ]}
             value={stage}
-            onChange={(event) => setStage(event.target.value)}
+            onChange={(event) => {
+              setStage(event.target.value)
+              setPage(0)
+            }}
           />
         </div>
         <Button
           variant={raisingOnly ? 'primary' : 'outline'}
-          onClick={() => setRaisingOnly((prev) => !prev)}
+          aria-pressed={raisingOnly}
+          onClick={() => {
+            setRaisingOnly((prev) => !prev)
+            setPage(0)
+          }}
         >
           Raising now
         </Button>
@@ -106,38 +130,40 @@ const StartupDiscovery = () => {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {startups.map((startup) => (
-            <Card key={startup.id} className={cn(selected.includes(startup.id) && 'ring-2 ring-blue-500')}>
+            <Card key={startup.id} className={cn(selected.includes(startup.id) && 'ring-2 ring-brand')}>
               <CardContent className="py-5">
                 <div className="flex items-start gap-3">
                   <Avatar name={startup.name} logoUrl={startup.logoUrl} />
                   <div className="min-w-0 flex-1">
                     <Link
                       to={`/startups/${startup.id}`}
-                      className="block truncate font-semibold text-gray-900 hover:text-blue-700 hover:underline"
+                      className="block truncate font-semibold text-ink hover:text-brand-ink hover:underline"
                     >
                       {startup.name}
                     </Link>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-ink-muted">
                       {startup.sector} · {stageLabel(startup.stage)}
                     </p>
                   </div>
                   <button
                     type="button"
+                    aria-label={`Save ${startup.name} to wishlist`}
+                    aria-pressed={isSaved(startup.id)}
                     title={isSaved(startup.id) ? 'Remove from wishlist' : 'Save to wishlist'}
                     onClick={() => toggleWishlist.mutate(startup.id)}
                     className={cn(
-                      'rounded p-1.5 transition-colors',
+                      '-m-1.5 inline-flex h-11 w-11 items-center justify-center rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand lg:m-0 lg:h-8 lg:w-8',
                       isSaved(startup.id)
-                        ? 'text-red-500 hover:bg-red-50'
-                        : 'text-gray-300 hover:bg-gray-100 hover:text-gray-500'
+                        ? 'text-negative hover:bg-negative-subtle'
+                        : 'text-icon-muted hover:bg-surface-hover hover:text-ink-secondary'
                     )}
                   >
-                    <HeartIcon className="h-4.5 w-4.5" />
+                    <HeartIcon className="h-4.5 w-4.5" aria-hidden="true" />
                   </button>
                 </div>
 
                 {startup.description && (
-                  <p className="mt-3 line-clamp-2 text-sm text-gray-600">{startup.description}</p>
+                  <p className="mt-3 line-clamp-2 text-sm text-ink-secondary">{startup.description}</p>
                 )}
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -158,16 +184,29 @@ const StartupDiscovery = () => {
           ))}
         </div>
       )}
+
+      {query.data && (
+        <Pagination
+          page={query.data.page}
+          totalPages={query.data.totalPages}
+          totalElements={query.data.totalElements}
+          size={query.data.size}
+          onPageChange={setPage}
+          label="startups"
+        />
+      )}
     </>
   )
 }
 
 const InvestorDiscovery = () => {
   const [search, setSearch] = useState('')
+  const debouncedSearch = useDebouncedValue(search.trim())
 
   const query = useQuery({
-    queryKey: ['vc-firms', 'search', search],
-    queryFn: () => vcFirmApi.searchFirms(search || undefined),
+    queryKey: ['vc-firms', 'search', debouncedSearch],
+    queryFn: () => vcFirmApi.searchFirms(debouncedSearch || undefined),
+    placeholderData: keepPreviousData,
   })
 
   const { isSaved, toggle: toggleWishlist } = useWishlistToggle(WishlistTargetType.VC_FIRM)
@@ -186,6 +225,7 @@ const InvestorDiscovery = () => {
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search firms…"
+          aria-label="Search investors by firm name"
         />
       </div>
 
@@ -209,29 +249,31 @@ const InvestorDiscovery = () => {
                   <div className="min-w-0 flex-1">
                     <Link
                       to={`/firms/${firm.id}`}
-                      className="block truncate font-semibold text-gray-900 hover:text-blue-700 hover:underline"
+                      className="block truncate font-semibold text-ink hover:text-brand-ink hover:underline"
                     >
                       {firm.name}
                     </Link>
-                    {firm.location && <p className="text-xs text-gray-500">{firm.location}</p>}
+                    {firm.location && <p className="text-xs text-ink-muted">{firm.location}</p>}
                   </div>
                   <button
                     type="button"
+                    aria-label={`Save ${firm.name} to wishlist`}
+                    aria-pressed={isSaved(firm.id)}
                     title={isSaved(firm.id) ? 'Remove from wishlist' : 'Save to wishlist'}
                     onClick={() => toggleWishlist.mutate(firm.id)}
                     className={cn(
-                      'rounded p-1.5 transition-colors',
+                      '-m-1.5 inline-flex h-11 w-11 items-center justify-center rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand lg:m-0 lg:h-8 lg:w-8',
                       isSaved(firm.id)
-                        ? 'text-red-500 hover:bg-red-50'
-                        : 'text-gray-300 hover:bg-gray-100 hover:text-gray-500'
+                        ? 'text-negative hover:bg-negative-subtle'
+                        : 'text-icon-muted hover:bg-surface-hover hover:text-ink-secondary'
                     )}
                   >
-                    <HeartIcon className="h-4.5 w-4.5" />
+                    <HeartIcon className="h-4.5 w-4.5" aria-hidden="true" />
                   </button>
                 </div>
 
                 {firm.description && (
-                  <p className="mt-3 line-clamp-2 text-sm text-gray-600">{firm.description}</p>
+                  <p className="mt-3 line-clamp-2 text-sm text-ink-secondary">{firm.description}</p>
                 )}
 
                 <div className="mt-3 flex flex-wrap gap-1.5">

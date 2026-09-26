@@ -5,6 +5,7 @@ import { authApi } from '@/features/auth/api'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Loading } from '@/components/Loading'
+import { useDocumentTitle } from '@/lib/useDocumentTitle'
 
 export const LandingPage = () => {
   const { isAuthenticated, isLoading } = useAuth()
@@ -14,6 +15,7 @@ export const LandingPage = () => {
   const [password, setPassword] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
+  useDocumentTitle('Sign in')
 
   if (isLoading) {
     return <Loading />
@@ -50,11 +52,11 @@ export const LandingPage = () => {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      <div className="w-full max-w-md p-8 bg-white rounded-lg shadow-lg">
+    <main className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 px-4">
+      <div className="w-full max-w-md p-8 bg-surface rounded-lg shadow-lg">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Dashboard</h1>
-          <p className="text-gray-600">Connect VCs and Startups</p>
+          <h1 className="text-4xl font-bold text-ink mb-2">Dashboard</h1>
+          <p className="text-ink-secondary">Connect VCs and Startups</p>
         </div>
 
         {!isTestMode && (
@@ -77,25 +79,30 @@ export const LandingPage = () => {
               Sign in with LinkedIn
             </Button>
 
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">or</span>
-              </div>
-            </div>
+            {/* Email/password login exists for local testing only; production builds drop it. */}
+            {import.meta.env.DEV && (
+              <>
+                <div className="relative my-6">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-line-strong"></div>
+                  </div>
+                  <div className="relative flex justify-center text-sm">
+                    <span className="px-2 bg-surface text-ink-muted">or</span>
+                  </div>
+                </div>
 
-            <Button
-              onClick={() => setIsTestMode(true)}
-              variant="secondary"
-              size="lg"
-              className="w-full"
-            >
-              Test Login (dev only)
-            </Button>
+                <Button
+                  onClick={() => setIsTestMode(true)}
+                  variant="secondary"
+                  size="lg"
+                  className="w-full"
+                >
+                  Test Login (dev only)
+                </Button>
+              </>
+            )}
 
-            <p className="text-center text-sm text-gray-500 mt-6">
+            <p className="text-center text-sm text-ink-muted mt-6">
               By signing in, you agree to our Terms of Service and Privacy Policy
             </p>
           </div>
@@ -103,21 +110,23 @@ export const LandingPage = () => {
 
         {isTestMode && (
           <form onSubmit={handleTestSubmit} className="space-y-4">
-            <div className="bg-yellow-50 border border-yellow-200 rounded p-3 mb-4">
-              <p className="text-xs text-yellow-800">
+            <div className="bg-notice-subtle border border-[color-mix(in_oklab,var(--notice)_25%,transparent)] rounded p-3 mb-4">
+              <p className="text-xs text-notice">
                 <strong>DEV ONLY:</strong> This email/password login is for testing purposes only. Use Google or LinkedIn for production.
               </p>
             </div>
 
             {error && (
-              <div className="bg-red-50 border border-red-200 rounded p-3">
-                <p className="text-sm text-red-800">{error}</p>
+              <div role="alert" className="bg-negative-subtle border border-[color-mix(in_oklab,var(--negative)_25%,transparent)] rounded p-3">
+                <p className="text-sm text-negative">{error}</p>
               </div>
             )}
 
             <Input
               type="email"
               placeholder="Email"
+              aria-label="Email"
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -127,6 +136,8 @@ export const LandingPage = () => {
             <Input
               type="password"
               placeholder="Password"
+              aria-label="Password"
+              autoComplete={isRegister ? 'new-password' : 'current-password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -168,12 +179,12 @@ export const LandingPage = () => {
               Back to OAuth
             </Button>
 
-            <p className="text-center text-xs text-gray-500 mt-4">
+            <p className="text-center text-xs text-ink-muted mt-4">
               By signing in, you agree to our Terms of Service and Privacy Policy
             </p>
           </form>
         )}
       </div>
-    </div>
+    </main>
   )
 }

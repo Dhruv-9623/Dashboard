@@ -1,4 +1,4 @@
-import { cn } from '@/lib/utils'
+import { MetricCard } from '@/components/MetricCard'
 
 interface StatTileProps {
   label: string
@@ -7,16 +7,19 @@ interface StatTileProps {
   tone?: 'default' | 'amber' | 'red'
 }
 
-const tones = {
-  default: 'text-gray-900',
-  amber: 'text-amber-600',
-  red: 'text-red-600',
-}
-
+/**
+ * Kept as a thin wrapper over {@link MetricCard} so the pages that still use the
+ * older name pick up the new card — border, elevation, micro-label and figure
+ * treatment — without each one being rewritten.
+ *
+ * New code should use MetricCard directly: it also takes a delta, a trend and an
+ * animated figure, none of which this signature can express.
+ */
 export const StatTile = ({ label, value, hint, tone = 'default' }: StatTileProps) => (
-  <div className="rounded-lg border border-gray-200 bg-white p-4">
-    <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</p>
-    <p className={cn('mt-1.5 text-2xl font-semibold tabular-nums', tones[tone])}>{value}</p>
-    {hint && <p className="mt-1 text-xs text-gray-500">{hint}</p>}
-  </div>
+  <MetricCard
+    label={label}
+    value={value}
+    hint={hint}
+    tone={tone === 'amber' ? 'notice' : tone === 'red' ? 'negative' : 'default'}
+  />
 )

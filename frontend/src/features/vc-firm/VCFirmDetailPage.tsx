@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
+import { safeUrl } from '@/lib/utils'
 import { vcFirmApi } from './api'
 import { useAuth } from '@/features/auth/useAuth'
 import { UserType } from '@/features/auth/types'
@@ -26,7 +27,12 @@ export const VCFirmDetailPage = () => {
 
   if (query.isLoading) return <Skeleton className="h-96 w-full" />
   if (query.isError || !query.data) {
-    return <ErrorState error={query.error ?? new Error('Firm not found')} />
+    return (
+      <ErrorState
+        error={query.error ?? new Error('Firm not found')}
+        onRetry={query.isError ? () => query.refetch() : undefined}
+      />
+    )
   }
 
   const firm = query.data
@@ -57,12 +63,12 @@ export const VCFirmDetailPage = () => {
                   ))}
                   {firm.investmentStage && <Badge>{firm.investmentStage}</Badge>}
                 </div>
-                {firm.website && (
+                {safeUrl(firm.website) && (
                   <a
-                    href={firm.website}
+                    href={safeUrl(firm.website)}
                     target="_blank"
                     rel="noreferrer noopener"
-                    className="mt-2 inline-block text-sm text-blue-600 hover:underline"
+                    className="mt-2 inline-block text-sm text-brand-ink hover:underline"
                   >
                     {firm.website}
                   </a>
@@ -71,7 +77,7 @@ export const VCFirmDetailPage = () => {
             </div>
 
             {firm.description && (
-              <p className="mt-5 text-sm leading-relaxed text-gray-700">{firm.description}</p>
+              <p className="mt-5 text-sm leading-relaxed text-ink-secondary">{firm.description}</p>
             )}
           </CardContent>
         </Card>

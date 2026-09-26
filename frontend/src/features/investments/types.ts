@@ -4,13 +4,19 @@ export enum InvestmentStatus {
   WRITTEN_OFF = 'WRITTEN_OFF',
 }
 
+/** Matches the backend's InvestmentRound (union of both sides' lists). */
 export enum InvestmentRound {
   PRE_SEED = 'PRE_SEED',
   SEED = 'SEED',
   SERIES_A = 'SERIES_A',
   SERIES_B = 'SERIES_B',
   SERIES_C = 'SERIES_C',
+  SERIES_D = 'SERIES_D',
+  SERIES_E_PLUS = 'SERIES_E_PLUS',
   GROWTH = 'GROWTH',
+  BRIDGE = 'BRIDGE',
+  SECONDARY = 'SECONDARY',
+  TERTIARY = 'TERTIARY',
 }
 
 export interface InvestmentDTO {
@@ -29,6 +35,16 @@ export interface InvestmentDTO {
   notes: string | null
   createdAt: string
   updatedAt: string
+}
+
+/** Firm-wide figures from GET /api/investments/summary — correct regardless of paging. */
+export interface InvestmentSummaryDTO {
+  /** Whole-unit totals per ISO currency code; never summed across currencies. */
+  totalsByCurrency: Record<string, number>
+  totalCount: number
+  activeCount: number
+  exitedCount: number
+  writtenOffCount: number
 }
 
 export interface UpsertInvestmentRequest {
@@ -54,5 +70,10 @@ export const roundLabels: Record<InvestmentRound, string> = {
   [InvestmentRound.SERIES_A]: 'Series A',
   [InvestmentRound.SERIES_B]: 'Series B',
   [InvestmentRound.SERIES_C]: 'Series C',
+  [InvestmentRound.SERIES_D]: 'Series D',
+  [InvestmentRound.SERIES_E_PLUS]: 'Series E+',
   [InvestmentRound.GROWTH]: 'Growth',
+  [InvestmentRound.BRIDGE]: 'Bridge',
+  [InvestmentRound.SECONDARY]: 'Secondary',
+  [InvestmentRound.TERTIARY]: 'Tertiary',
 }

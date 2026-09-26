@@ -8,7 +8,8 @@ import { PageHeader } from '@/components/PageHeader'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState, errorMessage } from '@/components/ErrorState'
 import { Card, CardContent } from '@/components/ui/Card'
-import { Button } from '@/components/ui/Button'
+import { Button, buttonClass } from '@/components/ui/Button'
+import { safeUrl } from '@/lib/utils'
 import { Badge } from '@/components/ui/Badge'
 import { Select } from '@/components/ui/Select'
 import { Input } from '@/components/ui/Input'
@@ -102,7 +103,7 @@ const CommitModal = ({
         </div>
 
         {(cycle.minTicketSize || cycle.maxTicketSize) && (
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-ink-muted">
             Ticket range: {formatMoney(cycle.minTicketSize, cycle.currency)} –{' '}
             {formatMoney(cycle.maxTicketSize, cycle.currency)}
           </p>
@@ -146,6 +147,7 @@ export const DealFlowPage = () => {
       <div className="mb-5 flex flex-wrap gap-3">
         <div className="w-48">
           <Select
+            aria-label="Filter by sector"
             options={[{ value: '', label: 'All sectors' }, ...sectorOptions]}
             value={sector}
             onChange={(event) => setSector(event.target.value)}
@@ -153,6 +155,7 @@ export const DealFlowPage = () => {
         </div>
         <div className="w-48">
           <Select
+            aria-label="Filter by stage"
             options={[
               { value: '', label: 'All stages' },
               ...STAGES.map((entry) => ({ value: entry.value, label: entry.label })),
@@ -187,11 +190,11 @@ export const DealFlowPage = () => {
                     <div className="min-w-0">
                       <Link
                         to={`/startups/${cycle.startupId}`}
-                        className="text-base font-semibold text-gray-900 hover:text-blue-700 hover:underline"
+                        className="text-base font-semibold text-ink hover:text-brand-ink hover:underline"
                       >
                         {cycle.startupName}
                       </Link>
-                      <p className="mt-0.5 text-sm text-gray-500">
+                      <p className="mt-0.5 text-sm text-ink-muted">
                         {cycle.startupSector} · {stageLabel(cycle.startupStage)}
                       </p>
                     </div>
@@ -202,15 +205,15 @@ export const DealFlowPage = () => {
 
                   <div className="mt-4">
                     <div className="flex items-baseline justify-between text-sm">
-                      <span className="font-medium text-gray-900">
+                      <span className="font-medium text-ink">
                         {formatMoney(cycle.committedAmount, cycle.currency)}
                       </span>
-                      <span className="text-gray-500">
+                      <span className="text-ink-muted">
                         of {formatMoney(cycle.targetAmount, cycle.currency)}
                       </span>
                     </div>
                     <Progress className="mt-2" value={progress} tone="green" />
-                    <p className="mt-1.5 text-xs text-gray-500">
+                    <p className="mt-1.5 text-xs text-ink-muted">
                       {cycle.roundType} · {cycle.commitmentCount} investor
                       {cycle.commitmentCount === 1 ? '' : 's'} committed
                     </p>
@@ -220,17 +223,21 @@ export const DealFlowPage = () => {
                     <Button size="sm" onClick={() => setCommitting(cycle)}>
                       Commit
                     </Button>
-                    {cycle.pitchDeckUrl && (
-                      <a href={cycle.pitchDeckUrl} target="_blank" rel="noreferrer noopener">
-                        <Button size="sm" variant="outline">
-                          Pitch deck
-                        </Button>
+                    {safeUrl(cycle.pitchDeckUrl) && (
+                      <a
+                        href={safeUrl(cycle.pitchDeckUrl)}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className={buttonClass({ size: 'sm', variant: 'outline' })}
+                      >
+                        Pitch deck
                       </a>
                     )}
-                    <Link to={`/startups/${cycle.startupId}`}>
-                      <Button size="sm" variant="ghost">
-                        View profile
-                      </Button>
+                    <Link
+                      to={`/startups/${cycle.startupId}`}
+                      className={buttonClass({ size: 'sm', variant: 'ghost' })}
+                    >
+                      View profile
                     </Link>
                   </div>
                 </CardContent>

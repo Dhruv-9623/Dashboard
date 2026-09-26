@@ -19,6 +19,20 @@ const readUserType = () => {
 
 let userType = readUserType()
 
+/** Mirrors the backend's PageResponse envelope (common/PageResponse.java). */
+const paged = <T>(items: T[], url: URL) => {
+  const page = Number(url.searchParams.get('page') ?? 0)
+  const size = Math.min(Number(url.searchParams.get('size') ?? 20), 100)
+  const start = page * size
+  return {
+    items: items.slice(start, start + size),
+    page,
+    size,
+    totalElements: items.length,
+    totalPages: Math.max(Math.ceil(items.length / size), 1),
+  }
+}
+
 const uid = (prefix: string) => {
   const random = window.crypto.getRandomValues(new Uint32Array(1))[0]
   return `${prefix}-${random.toString(36).padStart(7, '0').slice(0, 7)}`
@@ -41,7 +55,7 @@ const routes: Array<[string, RegExp, Handler]> = [
   }],
   ['GET', /^\/api\/vc\/firms\/([^/]+)\/members$/, () => db.members],
   ['POST', /^\/api\/vc\/firms\/([^/]+)\/members$/, ({ body }) => {
-    const member = { id: uid('m'), userId: uid('u'), userEmail: body.userId, firmId: db.firm.id, role: 'STAFF', joinedAt: now(), createdAt: now(), updatedAt: now() }
+    const member = { id: uid('m'), userId: uid('u'), userEmail: body.email, firmId: db.firm.id, role: body.role ?? 'STAFF', joinedAt: now(), createdAt: now(), updatedAt: now() }
     db.members.push(member as never)
     return member
   }],
@@ -71,13 +85,14 @@ const routes: Array<[string, RegExp, Handler]> = [
     const sector = url.searchParams.get('sector')
     const stage = url.searchParams.get('stage')
     const raising = url.searchParams.get('raisingOnly') === 'true'
-    return db.startups.filter(
+    const matches = db.startups.filter(
       (s) =>
         s.name.toLowerCase().includes(search) &&
         (!sector || s.sector === sector) &&
         (!stage || s.stage === stage) &&
         (!raising || s.isRaising)
     )
+    return paged(matches, url)
   }],
   ['GET', /^\/api\/startups\/([^/]+)\/members$/, () => [
     { id: 'sm-1', userId: 'u-9', userEmail: 'priya@lumen.health', startupId: 's-1', role: 'FOUNDER', joinedAt: db.startups[0].createdAt },
@@ -98,7 +113,24 @@ const routes: Array<[string, RegExp, Handler]> = [
   }],
 
   // ---- investments ----
-  ['GET', /^\/api\/investments$/, () => db.investments],
+  ['GET', /^\/api\/investments$/, ({ url }) => {
+    const status = url.searchParams.get('status')
+    return paged(status ? db.investments.filter((i) => i.status === status) : db.investments, url)
+  }],
+  ['GET', /^\/api\/investments\/summary$/, () => {
+    const totalsByCurrency: Record<string, number> = {}
+    for (const item of db.investments) {
+      totalsByCurrency[item.currency] = (totalsByCurrency[item.currency] ?? 0) + item.amount
+    }
+    const count = (status: string) => db.investments.filter((i) => i.status === status).length
+    return {
+      totalsByCurrency,
+      totalCount: db.investments.length,
+      activeCount: count('ACTIVE'),
+      exitedCount: count('EXITED'),
+      writtenOffCount: count('WRITTEN_OFF'),
+    }
+  }],
   ['POST', /^\/api\/investments$/, ({ body }) => {
     const startup = db.startups.find((s) => s.id === body.startupId)
     const item = { id: uid('i'), vcFirmId: 'f-1', startupName: startup?.name ?? 'Unknown', startupSector: startup?.sector ?? '—', startupLogoUrl: null, equityPercentage: null, notes: null, createdAt: now(), updatedAt: now(), ...body }
@@ -117,7 +149,10 @@ const routes: Array<[string, RegExp, Handler]> = [
   }],
 
   // ---- pool ----
-  ['GET', /^\/api\/pool$/, () => db.pool],
+  ['GET', /^\/api\/pool$/, ({ url }) => {
+    const interest = url.searchParams.get('interestLevel')
+    return paged(interest ? db.pool.filter((p) => p.interestLevel === interest) : db.pool, url)
+  }],
   ['POST', /^\/api\/pool$/, ({ body }) => {
     const entry = { id: uid('p'), vcFirmId: 'f-1', startupId: body.startupId ?? null, addedByEmail: db.user.email, addedAt: now(), sector: null, stage: null, notes: null, ...body }
     db.pool.unshift(entry as never)
@@ -372,8 +407,38 @@ const routes: Array<[string, RegExp, Handler]> = [
       }))],
 ]
 
+const SCENARIO_KEY = 'mock-scenario'
+
+/**
+ * How the fake API behaves, so the states that are hardest to reach on real data can be looked at
+ * directly: `?mock=error`, `?mock=empty`, `?mock=slow`, `?mock=off` (the default).
+ *
+ * The design review had to inject these from the browser console; this makes them shareable URLs.
+ */
+type Scenario = 'off' | 'error' | 'empty' | 'slow'
+
+const readScenario = (): Scenario => {
+  const fromUrl = new URLSearchParams(window.location.search).get('mock')
+  if (fromUrl === 'error' || fromUrl === 'empty' || fromUrl === 'slow' || fromUrl === 'off') {
+    sessionStorage.setItem(SCENARIO_KEY, fromUrl)
+    return fromUrl
+  }
+  const stored = sessionStorage.getItem(SCENARIO_KEY)
+  return stored === 'error' || stored === 'empty' || stored === 'slow' ? stored : 'off'
+}
+
+/** Strips a scenario's data down to nothing, whatever shape the endpoint returns. */
+const emptied = (data: unknown): unknown => {
+  if (Array.isArray(data)) return []
+  if (data && typeof data === 'object' && 'items' in data) {
+    return { ...(data as object), items: [], totalElements: 0, totalPages: 1 }
+  }
+  return null
+}
+
 export function installMocks() {
   userType = readUserType()
+  const scenario = readScenario()
   const passthrough = window.fetch.bind(window)
 
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -396,9 +461,27 @@ export function installMocks() {
       }
 
       const data = handler({ url, body, params: match.slice(1) })
-      await new Promise((resolve) => setTimeout(resolve, 120))
+      await new Promise((resolve) => setTimeout(resolve, scenario === 'slow' ? 4000 : 120))
 
-      return new Response(JSON.stringify({ success: true, data, timestamp: now() }), {
+      // Auth and profile keep working in every scenario, otherwise the app just bounces to
+      // sign-in and no page renders in the state being looked at.
+      const isSession = /^\/api\/(auth|vc\/firms\/me|startups\/me)/.test(url.pathname)
+
+      if (scenario === 'error' && !isSession) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            errorCode: 'INTERNAL_ERROR',
+            message: 'Injected failure (?mock=error)',
+            timestamp: now(),
+          }),
+          { status: 500, headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
+      const payload = scenario === 'empty' && !isSession ? emptied(data) : data
+
+      return new Response(JSON.stringify({ success: true, data: payload, timestamp: now() }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -409,7 +492,8 @@ export function installMocks() {
 
   // eslint-disable-next-line no-console
   console.info(
-    `[mocks] Serving fixture data as a ${userType === 'startup' ? 'STARTUP' : 'VC'} user. ` +
-      `Switch with ?as=startup or ?as=vc`
+    `[mocks] Serving fixture data as a ${userType === 'startup' ? 'STARTUP' : 'VC'} user` +
+      (scenario === 'off' ? '' : ` in "${scenario}" mode`) + '. ' +
+      `Switch with ?as=startup / ?as=vc, and ?mock=error | empty | slow | off`
   )
 }

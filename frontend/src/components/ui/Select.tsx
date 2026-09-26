@@ -17,8 +17,8 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
       <select
         ref={ref}
         className={cn(
-          'flex h-10 w-full appearance-none rounded border border-gray-300 bg-white px-3 py-2 pr-9 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
-          !props.value && placeholder && 'text-gray-400',
+          'flex h-10 w-full appearance-none rounded border border-field bg-surface px-3 py-2 pr-9 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+          !props.value && placeholder && 'text-placeholder',
           className
         )}
         {...props}
@@ -29,13 +29,13 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
           </option>
         )}
         {options.map((option) => (
-          <option key={option.value} value={option.value} className="text-gray-900">
+          <option key={option.value} value={option.value} className="text-ink">
             {option.label}
           </option>
         ))}
       </select>
       <svg
-        className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+        className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-icon-muted"
         viewBox="0 0 20 20"
         fill="currentColor"
         aria-hidden="true"
@@ -75,10 +75,10 @@ export const MultiSelect = ({ options, value, onChange, className }: MultiSelect
             onClick={() => toggle(option.value)}
             aria-pressed={selected}
             className={cn(
-              'rounded-full border px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2',
+              'rounded-full border px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2',
               selected
-                ? 'border-blue-600 bg-blue-600 text-white hover:bg-blue-700'
-                : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                ? 'border-brand bg-brand text-white hover:bg-brand'
+                : 'border-field bg-surface text-ink-secondary hover:bg-surface-sunken'
             )}
           >
             {option.label}

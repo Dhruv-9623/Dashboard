@@ -1,32 +1,46 @@
 import React from 'react'
 import { cn } from '@/lib/utils'
 
-interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
-  variant?: 'default' | 'secondary' | 'success' | 'warning' | 'danger'
+type BadgeVariant = 'default' | 'secondary' | 'success' | 'warning' | 'danger' | 'info' | 'outline'
+
+interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
+  variant?: BadgeVariant
+  /** A leading status dot — for lifecycle states (Active, Open, Exited). */
+  dot?: boolean
 }
 
-export const Badge = React.forwardRef<HTMLDivElement, BadgeProps>(
-  ({ className, variant = 'default', ...props }, ref) => {
-    const variants = {
-      default: 'bg-blue-100 text-blue-800',
-      secondary: 'bg-gray-100 text-gray-800',
-      success: 'bg-green-100 text-green-800',
-      warning: 'bg-yellow-100 text-yellow-800',
-      danger: 'bg-red-100 text-red-800',
-    }
+const variants: Record<BadgeVariant, string> = {
+  default: 'bg-brand-subtle text-brand-ink border-brand-line',
+  secondary: 'bg-surface-sunken text-ink-secondary border-line',
+  success: 'bg-positive-subtle text-positive border-[color-mix(in_oklab,var(--positive)_22%,transparent)]',
+  warning: 'bg-notice-subtle text-notice border-[color-mix(in_oklab,var(--notice)_22%,transparent)]',
+  danger: 'bg-negative-subtle text-negative border-[color-mix(in_oklab,var(--negative)_22%,transparent)]',
+  info: 'bg-info-subtle text-info border-[color-mix(in_oklab,var(--info)_22%,transparent)]',
+  outline: 'bg-transparent text-ink-secondary border-line-strong',
+}
 
-    return (
-      <div
-        ref={ref}
-        className={cn(
-          'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-          variants[variant],
-          className
-        )}
-        {...props}
-      />
-    )
-  }
+/**
+ * A status or category label.
+ *
+ * Squarer than the old pill (6px, not fully rounded) so it reads as metadata
+ * rather than a button, with a hairline border that keeps the subtle fills from
+ * disappearing on a tinted row.
+ */
+export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
+  ({ className, variant = 'default', dot, children, ...props }, ref) => (
+    <span
+      ref={ref}
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap',
+        variants[variant],
+        className
+      )}
+      {...props}
+    >
+      {dot && <span aria-hidden="true" className="size-1.5 rounded-full bg-current opacity-80" />}
+      {children}
+    </span>
+  )
 )
 
 Badge.displayName = 'Badge'

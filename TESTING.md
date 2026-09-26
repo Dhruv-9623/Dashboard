@@ -1,10 +1,153 @@
-# Dashboard — AUTH TESTING & DEV FLOW GUIDE
+# Testing the Dashboard
 
-**Last Updated:** 2026-08-16  
-**Status:** ✅ DEV Testing Ready  
-**Scope:** Local development authentication testing (email/password login)
+**Last updated:** 21 Sep 2026
+
+Start here. Two commands get you a running, populated app; one command runs everything that
+doesn't need a running app.
+
+```bash
+scripts/dev-up.sh       # Postgres + Redis + backend + frontend, seeded with demo data
+scripts/test-all.sh     # backend tests, frontend typecheck, unit tests, production build
+```
+
+`dev-up.sh` prints the sign-in details when it finishes:
+
+| Side | Accounts | Password |
+|---|---|---|
+| VC | `owner@demo.dashboard.test`, `pm@`, `staff@` — firm "Meridian Ventures" | `Password123!` |
+| Startup | `founder@` (Ledgerly), `cofounder@` (Shiprack) | `Password123!` |
+
+The three VC accounts are the three roles, so the permission differences are visible by signing in
+as each: only OWNER can manage the team, STAFF can't record investments. Override the password with
+`DEMO_PASSWORD=…`, skip seeding with `SEED=false`, and stop everything with `scripts/dev-down.sh`.
 
 ---
+
+## What to run when
+
+| Command | Needs | What it covers |
+|---|---|---|
+| `./mvnw test` | Docker (for 12 of the tests) | 82 backend tests: services, web slices, security, migrations, full-context boot, the auth flow over HTTP |
+| `npm --prefix frontend run test` | — | 46 frontend unit and component tests |
+| `npm --prefix frontend run typecheck` | — | TypeScript across app and tests |
+| `npm --prefix frontend run build` | — | Production build |
+| `scripts/test-all.sh` | Docker | All four of the above |
+| `./mvnw verify` | Docker | The above plus a coverage report at `target/site/jacoco/index.html` |
+| `scripts/api-smoke-test.sh` | A running backend | 36 API checks: tenancy, role gates, validation, paging, summary totals |
+| `npm --prefix frontend run test:e2e` | A running stack | 23 browser checks through the real UI |
+| `npm --prefix frontend run dev:mock` | — | The UI on fixture data, no backend |
+| `node frontend/e2e/sweep.mjs` | A running app | Loads every page at 1440px and 375px; reports console errors, horizontal overflow and missing `h1`s |
+| `node frontend/e2e/shoot.mjs <url> <out.png>` | A running app | A screenshot, for looking at a change rather than guessing |
+
+**Docker is optional.** The container-backed tests skip themselves with a clear reason when no
+daemon is reachable, so `./mvnw test` still passes without Docker — it just proves less. CI always
+has Docker, so the migrations are always checked there.
+
+---
+
+## The end-to-end suites write to a real database
+
+Both `api-smoke-test.sh` and the browser suite register accounts and create firms, startups,
+investments and pool entries. They are safe to re-run (every run uses timestamped email addresses)
+but they leave rows behind. Point them at a scratch database, not `dashboard_dev`:
+
+```bash
+scripts/dev-down.sh
+DB_NAME=dashboard_scratch PORT=8081 FRONTEND_PORT=3002 scripts/dev-up.sh
+
+API_URL=http://localhost:8081 scripts/api-smoke-test.sh
+APP_URL=http://localhost:3002 API_URL=http://localhost:8081 npm --prefix frontend run test:e2e
+```
+
+The browser suite needs Chromium once: `npm --prefix frontend exec playwright install chromium`.
+
+`sweep.mjs` and `shoot.mjs` point at `APP_URL` (default `http://localhost:3100`) and don't write
+any data, so they are safe against the mock server:
+
+```bash
+npm --prefix frontend run dev:mock -- --port 3100
+node frontend/e2e/sweep.mjs
+node frontend/e2e/shoot.mjs "http://localhost:3100/dashboard?as=vc" /tmp/dash.png
+```
+
+---
+
+## Testing the states that are hard to reach
+
+On fixture data (`npm --prefix frontend run dev:mock`), the URL controls both the user and the
+condition of the API:
+
+| URL | Effect |
+|---|---|
+| `?as=vc` / `?as=startup` | Which side you're signed in as |
+| `?mock=error` | Every call fails with a 500 — checks error cards and retry |
+| `?mock=empty` | Every list comes back empty — checks empty states |
+| `?mock=slow` | Four-second responses — checks skeletons and disabled buttons |
+| `?mock=off` | Back to normal |
+
+Dark mode is stored in `localStorage` under `dashboard-theme` (`light` / `dark` / `system`), so a
+test can set it before load; the toggle is in the top bar.
+
+Auth and profile calls keep working in every mode, so the page you want to look at still renders.
+
+---
+
+## How the backend suite is organised
+
+| Layer | Example | Runs against |
+|---|---|---|
+| Service unit tests | `InvestmentServiceTest` | Mockito, no Spring |
+| Repository tests | `PortfolioRepositoryIntegrationTest` | H2, schema from the entities |
+| Web slice tests | `PortfolioApiWebTest`, `SecurityConfigWebTest` | MockMvc, mocked services |
+| Migration test | `FlywayMigrationTest` | **Real PostgreSQL** in a container |
+| Full-context tests | `DashboardApplicationTests`, `AuthFlowIntegrationTest`, `DemoDataSeederTest` | **Real PostgreSQL + Redis** in containers |
+
+Two things are worth knowing about the split:
+
+- **The migrations use PostgreSQL-only syntax** (partial unique indexes, named foreign-key
+  changes), so they cannot run on H2. Flyway is therefore off for the H2 tests, and
+  `FlywayMigrationTest` is the only check that the migrations apply — and, through
+  `ddl-auto=validate`, that the resulting schema still matches the entity mappings. If you change
+  an entity or add a migration, that test is the one that matters.
+- **Repository reads should also be tested outside a transaction.** An `@EntityGraph` with the
+  default `FETCH` type makes every attribute it doesn't name lazy, which passed every transactional
+  test and then failed in the browser. `PortfolioRepositoryIntegrationTest` has a deliberately
+  non-transactional case for this.
+
+Test data comes from `TestDataBuilder`: `TestDataBuilder.user().withEmail("a@b.test").build()`.
+Its defaults are unique but deterministic — a counter, not a random generator, so a failure
+reproduces.
+
+---
+
+## If something doesn't start
+
+| Symptom | Cause |
+|---|---|
+| `Backend didn't start` | Read `.dev/backend.log`. Usually a port in use or Postgres not ready. |
+| Flyway checksum mismatch | A migration that already ran was edited afterwards. Put the change in a new migration instead. |
+| Container-backed tests all skip | Docker isn't running. |
+| Port already in use | `scripts/dev-down.sh`, or run on other ports with `PORT=` / `FRONTEND_PORT=`. |
+
+OAuth (Google, LinkedIn) still needs real credentials exported before `dev-up.sh`; the demo
+accounts are email and password only.
+
+---
+
+## Other testing documents
+
+- `TEST_FRAMEWORK.md`, `TESTING_CHECKLIST.md` — conventions for writing backend tests.
+- `TESTING_SETUP_SUMMARY.md`, `TESTING_SYSTEM_OVERVIEW.md` — how the backend test scaffolding was
+  put together. Both predate the changes above and describe JavaFaker and a Testcontainers
+  configuration that no longer exist; treat this file as authoritative on how to run things.
+
+---
+
+# Historical: auth testing notes (16 Aug 2026)
+
+The rest of this file is the original auth-flow investigation. It is kept for the session-handling
+explanation in "Session Persistence Deep Dive"; the ports and commands in it have been superseded
+by the sections above.
 
 ## Table of Contents
 1. [Executive Summary](#executive-summary)
