@@ -44,16 +44,11 @@ export const vcFirmApi = {
       body: JSON.stringify(request),
     }),
 
-  changeMemberRole: (firmId: string, memberId: string, _newRole: VCRole) =>
-    fetchApi<VCMemberDTO>(`/api/vc/firms/${firmId}/members/${memberId}/role`, {
-      method: 'PUT',
-      body: JSON.stringify({}),
-      headers: {
-        'Accept': 'application/json',
-      },
-    }).then(() =>
-      // Refetch after role change to get updated data
-      fetchApi<VCMemberDTO[]>(`/api/vc/firms/${firmId}/members`)
+  /** The backend reads the new role from the query string, not the body. */
+  changeMemberRole: (firmId: string, memberId: string, newRole: VCRole) =>
+    fetchApi<VCMemberDTO>(
+      `/api/vc/firms/${firmId}/members/${memberId}/role?newRole=${encodeURIComponent(newRole)}`,
+      { method: 'PUT' }
     ),
 
   removeMember: (firmId: string, memberId: string) =>

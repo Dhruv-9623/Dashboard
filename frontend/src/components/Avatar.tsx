@@ -36,7 +36,7 @@ export const Avatar = ({ name, logoUrl, size = 'md', className }: AvatarProps) =
     <div
       aria-hidden="true"
       className={cn(
-        'flex shrink-0 items-center justify-center rounded-lg bg-gray-100 font-semibold text-gray-600',
+        'flex shrink-0 items-center justify-center rounded-lg bg-surface-hover font-semibold text-ink-secondary',
         sizes[size],
         className
       )}

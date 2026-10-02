@@ -1,25 +1,41 @@
-import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMemo, useState } from 'react'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { investmentApi, investmentKeys } from './api'
 import { InvestmentStatus, investmentStatusLabels, roundLabels } from './types'
 import type { InvestmentDTO } from './types'
 import { InvestmentForm } from './InvestmentForm'
 import { PageHeader } from '@/components/PageHeader'
-import { StatTile } from '@/components/StatTile'
-import { Avatar } from '@/components/Avatar'
+import { MetricCard } from '@/components/MetricCard'
+import { EntityAvatar } from '@/components/ui/EntityAvatar'
 import { EmptyState } from '@/components/EmptyState'
-import { ErrorState, errorMessage } from '@/components/ErrorState'
-import { Card } from '@/components/ui/Card'
+import { ErrorState } from '@/components/ErrorState'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { RowActions } from '@/components/ui/RowActions'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
-import { Modal } from '@/components/ui/Modal'
-import { Alert } from '@/components/ui/Alert'
+import { Pagination } from '@/components/ui/Pagination'
+import { useToast } from '@/components/ui/Toast'
 import { Tabs } from '@/components/ui/Tabs'
 import { SkeletonRows } from '@/components/ui/Skeleton'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table'
-import { PlusIcon, RocketIcon } from '@/components/icons'
-import { formatDate, formatMoney } from '@/lib/constants'
+import {
+  SortableHead,
+  Table,
+  TableBody,
+  TableCard,
+  TableCardField,
+  TableCardList,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+  TableSurface,
+} from '@/components/ui/Table'
+import type { SortDirection } from '@/components/ui/Table'
+import { PlusIcon, RocketIcon, TrashIcon } from '@/components/icons'
+import { formatCurrencyTotals, formatDate, formatMoney } from '@/lib/constants'
+import { useEntrance, useOrderTransition } from '@/lib/useMotion'
 
 const statusVariants: Record<InvestmentStatus, 'success' | 'secondary' | 'danger'> = {
   [InvestmentStatus.ACTIVE]: 'success',
@@ -28,82 +44,155 @@ const statusVariants: Record<InvestmentStatus, 'success' | 'secondary' | 'danger
 }
 
 type Filter = 'ALL' | InvestmentStatus
+type SortKey = 'company' | 'amount' | 'equity' | 'date'
+
+const PAGE_SIZE = 20
+
+/**
+ * Sorting is client-side, over the page in hand.
+ *
+ * That is a deliberate limit, not an oversight: the backend's list endpoint pages
+ * without a sort parameter, so sorting the whole portfolio would need an API
+ * change. Within a page it's honest — and the footer totals come from the
+ * server's summary, so no figure depends on the order.
+ */
+function sortRows(rows: InvestmentDTO[], key: SortKey, direction: SortDirection) {
+  const sign = direction === 'asc' ? 1 : -1
+  return [...rows].sort((a, b) => {
+    switch (key) {
+      case 'company':
+        return sign * a.startupName.localeCompare(b.startupName)
+      case 'amount':
+        return sign * (a.amount - b.amount)
+      case 'equity':
+        return sign * ((a.equityPercentage ?? -1) - (b.equityPercentage ?? -1))
+      case 'date':
+        return sign * (Date.parse(a.investmentDate) - Date.parse(b.investmentDate))
+    }
+  })
+}
 
 export const InvestmentsPage = () => {
   const [filter, setFilter] = useState<Filter>('ALL')
+  const [page, setPage] = useState(0)
+  const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({
+    key: 'date',
+    direction: 'desc',
+  })
   const [editing, setEditing] = useState<InvestmentDTO | null>(null)
   const [formOpen, setFormOpen] = useState(false)
   const [deleting, setDeleting] = useState<InvestmentDTO | null>(null)
   const queryClient = useQueryClient()
+  const toast = useToast()
 
-  const query = useQuery({ queryKey: investmentKeys.all, queryFn: investmentApi.list })
+  const listParams = { status: filter === 'ALL' ? undefined : filter, page, size: PAGE_SIZE }
+  const query = useQuery({
+    queryKey: investmentKeys.list(listParams),
+    queryFn: () => investmentApi.list(listParams),
+    placeholderData: keepPreviousData,
+  })
+  // Portfolio-wide figures come from the server so they stay right when the list is paged.
+  const summary = useQuery({ queryKey: investmentKeys.summary, queryFn: investmentApi.summary })
 
   const remove = useMutation({
     mutationFn: (id: string) => investmentApi.remove(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: investmentKeys.all })
+      toast.success(deleting ? `Removed the ${deleting.startupName} investment` : 'Investment removed')
       setDeleting(null)
     },
   })
 
-  const investments = query.data ?? []
-  const active = investments.filter((item) => item.status === InvestmentStatus.ACTIVE)
-  const deployed = investments.reduce((total, item) => total + item.amount, 0)
-  const currency = investments[0]?.currency ?? 'INR'
+  const rows = query.data?.items ?? []
+  const visible = useMemo(() => sortRows(rows, sort.key, sort.direction), [rows, sort])
+  const totals = summary.data
+  const hasAny = (totals?.totalCount ?? 0) > 0
 
-  const visible = filter === 'ALL' ? investments : investments.filter((i) => i.status === filter)
+  // Rows glide to their new positions when the sort changes, instead of teleporting.
+  const tableRef = useOrderTransition<HTMLTableElement>(`${sort.key}-${sort.direction}`)
+  const cardsRef = useEntrance<HTMLUListElement>(page)
 
-  const countFor = (status: InvestmentStatus) =>
-    investments.filter((item) => item.status === status).length
+  // The page in hand, which is what the footer aggregates describe.
+  const pageTotal = visible.reduce<Record<string, number>>((acc, item) => {
+    acc[item.currency] = (acc[item.currency] ?? 0) + item.amount
+    return acc
+  }, {})
+
+  const toggleSort = (key: SortKey) =>
+    setSort((current) =>
+      current.key === key
+        ? { key, direction: current.direction === 'asc' ? 'desc' : 'asc' }
+        : { key, direction: key === 'company' ? 'asc' : 'desc' }
+    )
+
+  const changeFilter = (value: Filter) => {
+    setFilter(value)
+    setPage(0)
+  }
+
+  const openCreate = () => {
+    setEditing(null)
+    setFormOpen(true)
+  }
+
+  const openEdit = (item: InvestmentDTO) => {
+    setEditing(item)
+    setFormOpen(true)
+  }
 
   return (
     <>
       <PageHeader
         title="Investments"
         description="Positions your firm holds. Conflict Sentinel and Portfolio Pulse both read from this."
+        meta={
+          hasAny ? (
+            <Badge variant="secondary" className="tabular">
+              {totals?.totalCount} total
+            </Badge>
+          ) : undefined
+        }
         actions={
-          <Button
-            onClick={() => {
-              setEditing(null)
-              setFormOpen(true)
-            }}
-          >
-            <PlusIcon className="mr-2 h-4 w-4" />
+          <Button onClick={openCreate}>
+            <PlusIcon className="size-4" aria-hidden="true" />
             Record investment
           </Button>
         }
       />
 
-      {investments.length > 0 && (
-        <div className="mb-6 grid gap-4 sm:grid-cols-3">
-          <StatTile label="Capital deployed" value={formatMoney(deployed, currency)} />
-          <StatTile label="Active holdings" value={active.length} />
-          <StatTile label="Exits" value={countFor(InvestmentStatus.EXITED)} />
+      {totals && hasAny && (
+        <div className="mb-4 grid gap-3 sm:grid-cols-3">
+          <MetricCard
+            label="Capital deployed"
+            value={formatCurrencyTotals(totals.totalsByCurrency)}
+            hint="Every position on record"
+            accent="var(--viz-1)"
+          />
+          <MetricCard
+            label="Active holdings"
+            count={{ to: totals.activeCount, format: (value) => String(Math.round(value)) }}
+            accent="var(--viz-2)"
+          />
+          <MetricCard
+            label="Exits"
+            count={{ to: totals.exitedCount, format: (value) => String(Math.round(value)) }}
+            hint={totals.writtenOffCount > 0 ? `${totals.writtenOffCount} written off` : undefined}
+            accent="var(--viz-3)"
+          />
         </div>
       )}
 
-      {investments.length > 0 && (
+      {totals && hasAny && (
         <Tabs
-          className="mb-5"
+          className="mb-3"
+          label="Investment status"
           value={filter}
-          onChange={(value) => setFilter(value as Filter)}
+          onChange={(value) => changeFilter(value as Filter)}
           items={[
-            { value: 'ALL', label: 'All', count: investments.length },
-            {
-              value: InvestmentStatus.ACTIVE,
-              label: 'Active',
-              count: countFor(InvestmentStatus.ACTIVE),
-            },
-            {
-              value: InvestmentStatus.EXITED,
-              label: 'Exited',
-              count: countFor(InvestmentStatus.EXITED),
-            },
-            {
-              value: InvestmentStatus.WRITTEN_OFF,
-              label: 'Written off',
-              count: countFor(InvestmentStatus.WRITTEN_OFF),
-            },
+            { value: 'ALL', label: 'All', count: totals.totalCount },
+            { value: InvestmentStatus.ACTIVE, label: 'Active', count: totals.activeCount },
+            { value: InvestmentStatus.EXITED, label: 'Exited', count: totals.exitedCount },
+            { value: InvestmentStatus.WRITTEN_OFF, label: 'Written off', count: totals.writtenOffCount },
           ]}
         />
       )}
@@ -114,94 +203,185 @@ export const InvestmentsPage = () => {
         <ErrorState error={query.error} onRetry={() => query.refetch()} />
       ) : visible.length === 0 ? (
         <EmptyState
-          icon={<RocketIcon className="h-6 w-6" />}
-          title={investments.length === 0 ? 'No investments recorded' : 'Nothing in this bucket'}
+          icon={<RocketIcon className="size-6" />}
+          title={hasAny ? 'Nothing in this bucket' : 'No investments recorded'}
           description="Record the positions your firm holds to power the portfolio views."
           action={
-            <Button
-              onClick={() => {
-                setEditing(null)
-                setFormOpen(true)
-              }}
-            >
-              <PlusIcon className="mr-2 h-4 w-4" />
+            <Button onClick={openCreate}>
+              <PlusIcon className="size-4" aria-hidden="true" />
               Record investment
             </Button>
           }
         />
       ) : (
-        <Card className="overflow-hidden">
-          <Table>
-            <TableHeader>
-              <tr>
-                <TableHead>Company</TableHead>
-                <TableHead>Round</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Equity</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </tr>
-            </TableHeader>
-            <TableBody>
-              {visible.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar name={item.startupName} logoUrl={item.startupLogoUrl} size="sm" />
-                      <div className="min-w-0">
-                        <Link
-                          to={`/startups/${item.startupId}`}
-                          className="truncate font-medium text-gray-900 hover:text-blue-700 hover:underline"
-                        >
-                          {item.startupName}
-                        </Link>
-                        <span className="block text-xs text-gray-500">{item.startupSector}</span>
+        <>
+          {/* Phone: one card per position. A seven-column table can't reflow
+              honestly at 375px, and a horizontal scroll hides the amounts. */}
+          <TableCardList ref={cardsRef}>
+            {visible.map((item) => (
+              <TableCard key={item.id}>
+                <div className="flex items-start gap-3">
+                  <EntityAvatar name={item.startupName} logoUrl={item.startupLogoUrl} />
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      to={`/startups/${item.startupId}`}
+                      className="block truncate text-sm font-medium text-ink hover:text-brand-ink hover:underline"
+                    >
+                      {item.startupName}
+                    </Link>
+                    <p className="truncate text-xs text-ink-muted">{item.startupSector}</p>
+                  </div>
+                  <Badge variant={statusVariants[item.status]} dot>
+                    {investmentStatusLabels[item.status]}
+                  </Badge>
+                </div>
+                <div className="mt-3 grid grid-cols-3 gap-3 border-t border-line pt-3">
+                  <TableCardField label="Amount">{formatMoney(item.amount, item.currency)}</TableCardField>
+                  <TableCardField label="Equity">
+                    {item.equityPercentage !== null ? `${item.equityPercentage.toFixed(2)}%` : '—'}
+                  </TableCardField>
+                  <TableCardField label="Round">{roundLabels[item.round]}</TableCardField>
+                </div>
+                <div className="mt-3 flex items-center justify-between border-t border-line pt-3">
+                  <span className="text-xs text-ink-muted">{formatDate(item.investmentDate)}</span>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => openEdit(item)}>
+                      Edit
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setDeleting(item)}>
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              </TableCard>
+            ))}
+          </TableCardList>
+
+          <TableSurface className="max-sm:hidden">
+            <Table ref={tableRef}>
+              <TableHeader>
+                <tr className="group/head">
+                  <SortableHead
+                    active={sort.key === 'company'}
+                    direction={sort.direction}
+                    onSort={() => toggleSort('company')}
+                  >
+                    Company
+                  </SortableHead>
+                  <TableHead>Round</TableHead>
+                  <SortableHead
+                    numeric
+                    active={sort.key === 'amount'}
+                    direction={sort.direction}
+                    onSort={() => toggleSort('amount')}
+                  >
+                    Amount
+                  </SortableHead>
+                  <SortableHead
+                    numeric
+                    active={sort.key === 'equity'}
+                    direction={sort.direction}
+                    onSort={() => toggleSort('equity')}
+                  >
+                    Equity
+                  </SortableHead>
+                  <SortableHead
+                    active={sort.key === 'date'}
+                    direction={sort.direction}
+                    onSort={() => toggleSort('date')}
+                  >
+                    Date
+                  </SortableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-12">
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
+                </tr>
+              </TableHeader>
+              <TableBody>
+                {visible.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-2.5">
+                        <EntityAvatar name={item.startupName} logoUrl={item.startupLogoUrl} size="sm" />
+                        <div className="min-w-0">
+                          <Link
+                            to={`/startups/${item.startupId}`}
+                            className="block truncate font-medium text-ink hover:text-brand-ink hover:underline"
+                          >
+                            {item.startupName}
+                          </Link>
+                          <span className="block truncate text-xs text-ink-muted">
+                            {item.startupSector}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-sm text-gray-600">{roundLabels[item.round]}</TableCell>
-                  <TableCell className="text-sm tabular-nums text-gray-900">
-                    {formatMoney(item.amount, item.currency)}
-                  </TableCell>
-                  <TableCell className="text-sm tabular-nums text-gray-600">
-                    {item.equityPercentage !== null ? `${item.equityPercentage}%` : '—'}
-                  </TableCell>
-                  <TableCell className="text-sm text-gray-600">
-                    {formatDate(item.investmentDate)}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={statusVariants[item.status]}>
-                      {investmentStatusLabels[item.status]}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setEditing(item)
-                          setFormOpen(true)
-                        }}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-red-600 hover:bg-red-50"
-                        onClick={() => setDeleting(item)}
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
+                    </TableCell>
+                    <TableCell muted>{roundLabels[item.round]}</TableCell>
+                    <TableCell numeric className="font-medium">
+                      {formatMoney(item.amount, item.currency)}
+                    </TableCell>
+                    <TableCell numeric muted>
+                      {/* Fixed decimals, so a column of percentages lines up. */}
+                      {item.equityPercentage !== null ? `${item.equityPercentage.toFixed(2)}%` : '—'}
+                    </TableCell>
+                    <TableCell muted className="whitespace-nowrap">
+                      {formatDate(item.investmentDate)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={statusVariants[item.status]} dot>
+                        {investmentStatusLabels[item.status]}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <RowActions
+                        label={`Actions for ${item.startupName}`}
+                        actions={[
+                          { label: 'Edit position', onSelect: () => openEdit(item) },
+                          {
+                            label: 'View company',
+                            onSelect: () => undefined,
+                            to: `/startups/${item.startupId}`,
+                          },
+                          {
+                            label: 'Remove',
+                            destructive: true,
+                            icon: <TrashIcon className="size-4" aria-hidden="true" />,
+                            onSelect: () => setDeleting(item),
+                          },
+                        ]}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+              <TableFooter>
+                <tr>
+                  <td colSpan={2} className="px-4">
+                    {visible.length} on this page
+                  </td>
+                  <td className="px-4 text-right tabular font-medium text-ink">
+                    {formatCurrencyTotals(pageTotal)}
+                  </td>
+                  <td colSpan={4} className="px-4 text-right text-ink-muted">
+                    {totals ? `${formatCurrencyTotals(totals.totalsByCurrency)} in total` : ''}
+                  </td>
+                </tr>
+              </TableFooter>
+            </Table>
+          </TableSurface>
+        </>
+      )}
+
+      {query.data && (
+        <Pagination
+          page={query.data.page}
+          totalPages={query.data.totalPages}
+          totalElements={query.data.totalElements}
+          size={query.data.size}
+          onPageChange={setPage}
+          label="investments"
+        />
       )}
 
       {formOpen && (
@@ -215,32 +395,20 @@ export const InvestmentsPage = () => {
         />
       )}
 
-      <Modal
+      <ConfirmDialog
         open={Boolean(deleting)}
-        onClose={() => setDeleting(null)}
         title="Remove investment"
         description={deleting ? `The ${deleting.startupName} position will be deleted.` : undefined}
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setDeleting(null)} disabled={remove.isPending}>
-              Cancel
-            </Button>
-            <Button
-              className="bg-red-600 hover:bg-red-700 focus-visible:ring-red-500"
-              onClick={() => deleting && remove.mutate(deleting.id)}
-              disabled={remove.isPending}
-            >
-              {remove.isPending ? 'Removing…' : 'Remove'}
-            </Button>
-          </>
-        }
-      >
-        {remove.isError ? (
-          <Alert variant="danger">{errorMessage(remove.error)}</Alert>
-        ) : (
-          <p className="text-sm text-gray-600">This cannot be undone.</p>
-        )}
-      </Modal>
+        confirmLabel="Remove"
+        pendingLabel="Removing…"
+        isPending={remove.isPending}
+        error={remove.error}
+        onConfirm={() => deleting && remove.mutate(deleting.id)}
+        onCancel={() => {
+          setDeleting(null)
+          remove.reset()
+        }}
+      />
     </>
   )
 }

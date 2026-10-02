@@ -9,11 +9,15 @@ export const Label = React.forwardRef<HTMLLabelElement, LabelProps>(
   ({ className, required, children, ...props }, ref) => (
     <label
       ref={ref}
-      className={cn('mb-1.5 block text-sm font-medium text-gray-700', className)}
+      className={cn('mb-1.5 block text-sm font-medium text-ink-secondary', className)}
       {...props}
     >
       {children}
-      {required && <span className="ml-0.5 text-red-500">*</span>}
+      {required && (
+        <span className="ml-0.5 text-negative" aria-hidden="true">
+          *
+        </span>
+      )}
     </label>
   )
 )
@@ -21,9 +25,9 @@ export const Label = React.forwardRef<HTMLLabelElement, LabelProps>(
 Label.displayName = 'Label'
 
 export const FieldHint = ({ className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) => (
-  <p className={cn('mt-1.5 text-xs text-gray-500', className)} {...props} />
+  <p className={cn('mt-1.5 text-xs text-muted', className)} {...props} />
 )
 
 export const FieldError = ({ className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) => (
-  <p className={cn('mt-1.5 text-xs text-red-600', className)} {...props} />
+  <p className={cn('mt-1.5 text-xs text-negative', className)} {...props} />
 )

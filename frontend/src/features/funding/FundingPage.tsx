@@ -222,7 +222,7 @@ const Commitments = ({ cycleId }: { cycleId: string }) => {
 
   if (query.isLoading) return <SkeletonRows rows={2} />
   if (commitments.length === 0) {
-    return <p className="px-4 py-6 text-sm text-gray-500">No commitments on this round yet.</p>
+    return <p className="px-4 py-6 text-sm text-ink-muted">No commitments on this round yet.</p>
   }
 
   return (
@@ -239,8 +239,8 @@ const Commitments = ({ cycleId }: { cycleId: string }) => {
       <TableBody>
         {commitments.map((commitment) => (
           <TableRow key={commitment.id}>
-            <TableCell className="font-medium text-gray-900">{commitment.vcFirmName}</TableCell>
-            <TableCell className="tabular-nums text-gray-900">
+            <TableCell className="font-medium text-ink">{commitment.vcFirmName}</TableCell>
+            <TableCell className="tabular-nums text-ink">
               {formatMoney(commitment.amount, commitment.currency)}
             </TableCell>
             <TableCell>
@@ -248,7 +248,7 @@ const Commitments = ({ cycleId }: { cycleId: string }) => {
                 {commitmentStatusLabels[commitment.status]}
               </Badge>
             </TableCell>
-            <TableCell className="text-sm text-gray-600">
+            <TableCell className="text-sm text-ink-secondary">
               {formatDate(commitment.committedAt)}
             </TableCell>
             <TableCell className="text-right">
@@ -356,12 +356,12 @@ export const FundingPage = () => {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <div className="flex items-center gap-2">
-                        <h2 className="text-base font-semibold text-gray-900">{cycle.roundType}</h2>
+                        <h2 className="text-base font-semibold text-ink">{cycle.roundType}</h2>
                         <Badge variant={cycleStatusVariants[cycle.status]}>
                           {cycleStatusLabels[cycle.status]}
                         </Badge>
                       </div>
-                      <p className="mt-0.5 text-sm text-gray-500">
+                      <p className="mt-0.5 text-sm text-ink-muted">
                         Opened {formatDate(cycle.openedAt)}
                         {cycle.closedAt ? ` · closed ${formatDate(cycle.closedAt)}` : ''}
                       </p>
@@ -380,10 +380,10 @@ export const FundingPage = () => {
 
                   <div className="mt-4">
                     <div className="flex items-baseline justify-between text-sm">
-                      <span className="font-medium text-gray-900">
+                      <span className="font-medium text-ink">
                         {formatMoney(cycle.committedAmount, cycle.currency)}
                       </span>
-                      <span className="text-gray-500">
+                      <span className="text-ink-muted">
                         of {formatMoney(cycle.targetAmount, cycle.currency)}
                       </span>
                     </div>
@@ -401,7 +401,7 @@ export const FundingPage = () => {
                   </Button>
 
                   {expanded === cycle.id && (
-                    <div className="mt-3 overflow-hidden rounded border border-gray-200">
+                    <div className="mt-3 overflow-hidden rounded border border-line">
                       <Commitments cycleId={cycle.id} />
                     </div>
                   )}

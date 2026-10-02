@@ -1,5 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import { cn } from '@/lib/utils'
+import { useFocusTrap } from '@/lib/useFocusTrap'
+import { motion, overlayIn, duration, ease } from '@/lib/motion'
+import { Button } from './Button'
+import { XIcon } from '@/components/icons'
 
 interface ModalProps {
   open: boolean
@@ -9,6 +13,8 @@ interface ModalProps {
   children: React.ReactNode
   footer?: React.ReactNode
   className?: string
+  /** Wider layout for forms with side-by-side fields. */
+  size?: 'md' | 'lg'
 }
 
 export const Modal = ({
@@ -19,43 +25,89 @@ export const Modal = ({
   children,
   footer,
   className,
+  size = 'md',
 }: ModalProps) => {
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const scrimRef = useRef<HTMLDivElement>(null)
+  const titleId = useId()
+  const descriptionId = useId()
+
+  useFocusTrap(dialogRef, open, onClose)
+
+  // The dialog springs up as the scrim fades: the overshoot is what makes it
+  // feel summoned rather than switched on.
   useEffect(() => {
     if (!open) return
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+    const panel = dialogRef.current
+    const scrim = scrimRef.current
+    if (!panel) return
+    const panelIn = overlayIn(panel)
+    const scrimIn = scrim
+      ? motion(scrim, { opacity: [0, 1], duration: duration.quick, ease: ease.out })
+      : null
+    return () => {
+      panelIn?.revert()
+      scrimIn?.revert()
     }
-
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [open, onClose])
+  }, [open])
 
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
       <div
-        className="absolute inset-0 bg-gray-900/40"
+        ref={scrimRef}
+        className="absolute inset-0 bg-[rgb(10_12_18/0.5)] backdrop-blur-[2px]"
         onClick={onClose}
         aria-hidden="true"
       />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label={title}
+        aria-labelledby={titleId}
+        aria-describedby={description ? descriptionId : undefined}
+        tabIndex={-1}
         className={cn(
-          'relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-white shadow-xl',
+          'scrollbar-slim relative z-10 flex max-h-[92vh] w-full flex-col overflow-hidden',
+          // On a phone it's a sheet from the bottom; on a desktop, a centred dialog.
+          'rounded-t-2xl sm:rounded-2xl',
+          'border border-line bg-surface shadow-overlay focus:outline-none',
+          size === 'lg' ? 'sm:max-w-2xl' : 'sm:max-w-lg',
           className
         )}
       >
-        <div className="border-b border-gray-200 px-6 py-4">
-          <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-          {description && <p className="mt-1 text-sm text-gray-500">{description}</p>}
+        {/* The grab handle reads as "this sheet can be dismissed" on touch. */}
+        <div aria-hidden="true" className="mx-auto mt-2 h-1 w-10 rounded-full bg-line-strong sm:hidden" />
+
+        <div className="flex items-start justify-between gap-4 px-5 py-4 sm:px-6">
+          <div className="min-w-0">
+            <h2 id={titleId} className="text-[17px] font-semibold tracking-[-0.01em] text-ink">
+              {title}
+            </h2>
+            {description && (
+              <p id={descriptionId} className="mt-1 text-[13px] leading-relaxed text-ink-secondary">
+                {description}
+              </p>
+            )}
+          </div>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={onClose}
+            aria-label="Close"
+            className="-mr-1 -mt-1 shrink-0"
+          >
+            <XIcon className="size-4" aria-hidden="true" />
+          </Button>
         </div>
-        <div className="px-6 py-5">{children}</div>
+
+        <div className="scrollbar-slim flex-1 overflow-y-auto border-t border-line px-5 py-5 sm:px-6">
+          {children}
+        </div>
+
         {footer && (
-          <div className="flex justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4">
+          <div className="flex justify-end gap-2 border-t border-line bg-surface-sunken px-5 py-3.5 sm:px-6">
             {footer}
           </div>
         )}

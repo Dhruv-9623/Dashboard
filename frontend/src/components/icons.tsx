@@ -1,4 +1,4 @@
-import type { SVGProps } from 'react'
+import type { ComponentType, SVGProps } from 'react'
 
 const base = {
   fill: 'none',
@@ -201,3 +201,62 @@ export const TrashIcon = (props: IconProps) => (
     <path d="M5 7l1 13a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1l1-13M9 7V4h6v3" />
   </svg>
 )
+
+/* ---------------------------------------------------------------------------
+ * Icons added with the redesign. These come from lucide-react (installed with
+ * the shadcn components) rather than being hand-drawn like the ones above: the
+ * geometry matches — 24px box, round caps — and the wrapper pins the same 1.75
+ * stroke, so the two sets sit together without a visible seam.
+ * ------------------------------------------------------------------------- */
+import {
+  AlertCircle,
+  ArrowDownRight,
+  ArrowUpRight,
+  Bell,
+  ChevronDown,
+  ChevronsUpDown,
+  CircleCheck,
+  Clock,
+  Command,
+  ExternalLink,
+  Landmark,
+  Layers,
+  ListFilter,
+  Minus,
+  MoreHorizontal,
+  Moon,
+  PanelLeft,
+  Sun,
+  Target,
+  TrendingUp,
+  type LucideProps,
+} from 'lucide-react'
+
+const lucide = (Component: ComponentType<LucideProps>) => {
+  const Wrapped = (props: IconProps) => (
+    <Component strokeWidth={1.75} absoluteStrokeWidth {...(props as LucideProps)} />
+  )
+  Wrapped.displayName = `Lucide(${Component.displayName ?? 'icon'})`
+  return Wrapped
+}
+
+export const ChevronDownIcon = lucide(ChevronDown)
+export const ChevronUpDownIcon = lucide(ChevronsUpDown)
+export const DotsIcon = lucide(MoreHorizontal)
+export const ArrowUpRightIcon = lucide(ArrowUpRight)
+export const ArrowDownRightIcon = lucide(ArrowDownRight)
+export const FlatIcon = lucide(Minus)
+export const FilterIcon = lucide(ListFilter)
+export const SunIcon = lucide(Sun)
+export const MoonIcon = lucide(Moon)
+export const BellIcon = lucide(Bell)
+export const ExternalLinkIcon = lucide(ExternalLink)
+export const LayersIcon = lucide(Layers)
+export const TargetIcon = lucide(Target)
+export const ClockIcon = lucide(Clock)
+export const CommandIcon = lucide(Command)
+export const PanelLeftIcon = lucide(PanelLeft)
+export const TrendingUpIcon = lucide(TrendingUp)
+export const CircleCheckIcon = lucide(CircleCheck)
+export const AlertCircleIcon = lucide(AlertCircle)
+export const BankIcon = lucide(Landmark)

@@ -12,6 +12,7 @@ import { ScoreDial, scoreBand } from '@/components/ScoreDial'
 import { ErrorState, errorMessage } from '@/components/ErrorState'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
+import { safeUrl } from '@/lib/utils'
 import { Textarea } from '@/components/ui/Textarea'
 import { Label } from '@/components/ui/Label'
 import { Alert } from '@/components/ui/Alert'
@@ -21,10 +22,24 @@ import { formatDateTime, formatMoney, stageLabel } from '@/lib/constants'
 
 const Field = ({ label, value }: { label: string; value: React.ReactNode }) => (
   <div className="flex justify-between gap-4 py-2.5">
-    <dt className="shrink-0 text-sm text-gray-500">{label}</dt>
-    <dd className="text-right text-sm font-medium text-gray-900">{value}</dd>
+    <dt className="shrink-0 text-sm text-muted">{label}</dt>
+    <dd className="text-right text-sm font-medium text-ink">{value}</dd>
   </div>
 )
+
+// The scoring agent cites thesis fields by their API names; show readable labels instead.
+const thesisFieldLabels: Record<string, string> = {
+  sectors: 'Sectors',
+  stages: 'Stages',
+  chequeSize: 'Cheque size',
+  chequeSizeMin: 'Cheque size',
+  chequeSizeMax: 'Cheque size',
+  currency: 'Currency',
+  notes: 'Thesis notes',
+}
+
+const thesisFieldLabel = (field: string) =>
+  thesisFieldLabels[field] ?? field.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase())
 
 const decided = (status: OpportunityStatus) =>
   status === OpportunityStatus.APPROVED || status === OpportunityStatus.REJECTED
@@ -98,7 +113,7 @@ export const OpportunityDetailPage = () => {
         <div className="space-y-5">
           <Card>
             <CardContent className="py-4">
-              <dl className="divide-y divide-gray-100">
+              <dl className="divide-y divide-line">
                 <Field label="Status" value={<StatusBadge status={deal.status} />} />
                 <Field label="Sector" value={deal.sector} />
                 <Field label="Stage" value={stageLabel(deal.stage)} />
@@ -106,12 +121,12 @@ export const OpportunityDetailPage = () => {
                 <Field
                   label="Website"
                   value={
-                    deal.website ? (
+                    safeUrl(deal.website) ? (
                       <a
-                        href={deal.website}
+                        href={safeUrl(deal.website)}
                         target="_blank"
                         rel="noreferrer noopener"
-                        className="text-blue-600 hover:underline"
+                        className="text-brand-ink hover:underline"
                       >
                         Visit
                       </a>
@@ -130,10 +145,10 @@ export const OpportunityDetailPage = () => {
           {deal.description && (
             <Card>
               <CardContent className="py-4">
-                <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">
                   Description
                 </h2>
-                <p className="text-sm leading-relaxed text-gray-700">{deal.description}</p>
+                <p className="text-sm leading-relaxed text-ink-secondary">{deal.description}</p>
               </CardContent>
             </Card>
           )}
@@ -146,19 +161,19 @@ export const OpportunityDetailPage = () => {
                 <ScoreDial score={deal.fitScore} size="lg" />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-sm font-semibold text-gray-900">Thesis fit</h2>
+                    <h2 className="text-sm font-semibold text-ink">Thesis fit</h2>
                     {band && <span className={`text-sm font-medium ${band.tone}`}>{band.label}</span>}
                     {deal.recommendedAction && <ActionBadge action={deal.recommendedAction} />}
                   </div>
 
                   {scoring ? (
-                    <p className="mt-2 text-sm text-gray-500">
+                    <p className="mt-2 text-sm text-ink-muted">
                       The scoring agent is running. This refreshes automatically.
                     </p>
                   ) : deal.rationale ? (
-                    <p className="mt-2 text-sm leading-relaxed text-gray-700">{deal.rationale}</p>
+                    <p className="mt-2 text-sm leading-relaxed text-ink-secondary">{deal.rationale}</p>
                   ) : (
-                    <p className="mt-2 text-sm text-gray-500">
+                    <p className="mt-2 text-sm text-ink-muted">
                       No score yet. Check that a thesis is defined, then re-score.
                     </p>
                   )}
@@ -177,8 +192,8 @@ export const OpportunityDetailPage = () => {
               </div>
 
               {deal.citations.length > 0 && (
-                <div className="mt-5 space-y-2 border-t border-gray-100 pt-5">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                <div className="mt-5 space-y-2 border-t border-line pt-5">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
                     Why this score
                   </h3>
                   {deal.citations.map((citation, index) => (
@@ -186,18 +201,18 @@ export const OpportunityDetailPage = () => {
                       key={index}
                       className={`rounded-lg border p-3 ${
                         citation.supporting
-                          ? 'border-green-200 bg-green-50'
-                          : 'border-amber-200 bg-amber-50'
+                          ? 'border-[color-mix(in_oklab,var(--positive)_25%,transparent)] bg-positive-subtle'
+                          : 'border-[color-mix(in_oklab,var(--notice)_25%,transparent)] bg-notice-subtle'
                       }`}
                     >
                       <p
                         className={`text-xs font-semibold ${
-                          citation.supporting ? 'text-green-800' : 'text-amber-800'
+                          citation.supporting ? 'text-positive' : 'text-notice'
                         }`}
                       >
-                        {citation.supporting ? 'Supports' : 'Counts against'} · {citation.thesisField}
+                        {citation.supporting ? 'Supports' : 'Counts against'} · {thesisFieldLabel(citation.thesisField)}
                       </p>
-                      <p className="mt-1 text-sm text-gray-700">{citation.claim}</p>
+                      <p className="mt-1 text-sm text-ink-secondary">{citation.claim}</p>
                     </div>
                   ))}
                 </div>
@@ -209,8 +224,8 @@ export const OpportunityDetailPage = () => {
             <CardContent className="py-5">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-sm font-semibold text-gray-900">Conflict Sentinel</h2>
-                  <p className="text-xs text-gray-500">
+                  <h2 className="text-sm font-semibold text-ink">Conflict Sentinel</h2>
+                  <p className="text-xs text-ink-muted">
                     Overlap against your holdings, checked on demand.
                   </p>
                 </div>
@@ -237,7 +252,7 @@ export const OpportunityDetailPage = () => {
                 <ConflictReportView report={conflict.data} />
               ) : (
                 !runConflict.isPending && (
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-ink-muted">
                     No conflict check has been run for this opportunity yet.
                   </p>
                 )
@@ -249,21 +264,21 @@ export const OpportunityDetailPage = () => {
         <div>
           <Card className="lg:sticky lg:top-6">
             <CardContent className="py-5">
-              <h2 className="text-sm font-semibold text-gray-900">Decision</h2>
+              <h2 className="text-sm font-semibold text-ink">Decision</h2>
 
               {decided(deal.status) ? (
                 <div className="mt-3">
                   <StatusBadge status={deal.status} />
                   {deal.decisionNote && (
-                    <p className="mt-3 text-sm text-gray-700">{deal.decisionNote}</p>
+                    <p className="mt-3 text-sm text-ink-secondary">{deal.decisionNote}</p>
                   )}
-                  <p className="mt-3 text-xs text-gray-500">
+                  <p className="mt-3 text-xs text-ink-muted">
                     Recorded {formatDateTime(deal.updatedAt)}. Decisions are written to the audit log.
                   </p>
                 </div>
               ) : (
                 <>
-                  <p className="mt-1 text-xs text-gray-500">
+                  <p className="mt-1 text-xs text-ink-muted">
                     Your call overrides the recommendation. Both are kept.
                   </p>
 
@@ -313,7 +328,7 @@ export const OpportunityDetailPage = () => {
                   </div>
 
                   {deal.recommendedAction === RecommendedAction.NEEDS_MORE_INFO && (
-                    <p className="mt-3 text-xs text-gray-500">
+                    <p className="mt-3 text-xs text-ink-muted">
                       The agent flagged this as incomplete — adding a description and re-scoring
                       usually resolves it.
                     </p>
@@ -323,7 +338,7 @@ export const OpportunityDetailPage = () => {
 
               <Link
                 to="/deal-triage"
-                className="mt-5 block text-center text-sm text-blue-600 hover:underline"
+                className="mt-5 block text-center text-sm text-brand-ink hover:underline"
               >
                 Back to queue
               </Link>

@@ -6,7 +6,7 @@ import { useProfile, profileKeys } from '@/features/profile/useProfile'
 import { vcFirmApi } from '@/features/vc-firm/api'
 import { startupApi, startupKeys } from '@/features/startup/api'
 import { StartupRole, startupRoleLabels } from '@/features/startup/types'
-import { PlanTier, VCRole } from '@/features/vc-firm/types'
+import { PlanTier, VCRole, vcRoleLabels } from '@/features/vc-firm/types'
 import { ThesisForm } from '@/features/vc-firm/ThesisForm'
 import type { ThesisFormValues } from '@/features/vc-firm/ThesisForm'
 import { PLANS } from '@/features/vc-firm/plans'
@@ -344,9 +344,10 @@ const TeamTab = () => {
   const [role, setRole] = useState<string>(isStartup ? StartupRole.CO_FOUNDER : VCRole.STAFF)
   const queryClient = useQueryClient()
 
+  // A firm has a single owner, so OWNER isn't offered when inviting.
   const roleOptions = isStartup
     ? Object.values(StartupRole).map((value) => ({ value, label: startupRoleLabels[value] }))
-    : Object.values(VCRole).map((value) => ({ value, label: value.replace(/_/g, ' ') }))
+    : [VCRole.PORTFOLIO_MANAGER, VCRole.STAFF].map((value) => ({ value, label: vcRoleLabels[value] }))
 
   const query = useQuery<TeamMemberRow[]>({
     queryKey: isStartup
@@ -369,7 +370,10 @@ const TeamTab = () => {
       if (isStartup) {
         await startupApi.addMember(entityId as string, email.trim(), role as StartupRole)
       } else {
-        await vcFirmApi.addMember(entityId as string, { userId: email.trim() })
+        await vcFirmApi.addMember(entityId as string, {
+          email: email.trim(),
+          role: role as VCRole.PORTFOLIO_MANAGER | VCRole.STAFF,
+        })
       }
     },
     onSuccess: () => {
@@ -384,7 +388,7 @@ const TeamTab = () => {
     <div className="max-w-3xl space-y-5">
       <Card>
         <CardContent className="pt-6">
-          <h2 className="mb-4 text-sm font-semibold text-gray-900">Invite a teammate</h2>
+          <h2 className="mb-4 text-sm font-semibold text-ink">Invite a teammate</h2>
           <form
             onSubmit={(event) => {
               event.preventDefault()
@@ -433,7 +437,7 @@ const TeamTab = () => {
             <SkeletonRows rows={3} />
           </div>
         ) : members.length === 0 ? (
-          <p className="p-6 text-sm text-gray-500">No teammates yet.</p>
+          <p className="p-6 text-sm text-ink-muted">No teammates yet.</p>
         ) : (
           <Table>
             <TableHeader>
@@ -446,11 +450,15 @@ const TeamTab = () => {
             <TableBody>
               {members.map((member) => (
                 <TableRow key={member.id}>
-                  <TableCell className="font-medium text-gray-900">{member.userEmail}</TableCell>
+                  <TableCell className="font-medium text-ink">{member.userEmail}</TableCell>
                   <TableCell>
-                    <Badge variant="secondary">{String(member.role).replace(/_/g, ' ')}</Badge>
+                    <Badge variant="secondary">
+                      {vcRoleLabels[member.role as VCRole] ??
+                        startupRoleLabels[member.role as StartupRole] ??
+                        member.role}
+                    </Badge>
                   </TableCell>
-                  <TableCell className="text-sm text-gray-600">
+                  <TableCell className="text-sm text-ink-secondary">
                     {formatDate(member.joinedAt)}
                   </TableCell>
                 </TableRow>
@@ -528,25 +536,25 @@ const PlanTab = () => {
             <div
               key={plan.tier}
               className={cn(
-                'flex flex-col rounded-lg border-2 bg-white p-5',
-                current ? 'border-blue-600' : 'border-gray-200'
+                'flex flex-col rounded-lg border-2 bg-surface p-5',
+                current ? 'border-brand' : 'border-line'
               )}
             >
               <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-base font-semibold text-gray-900">{plan.name}</h2>
+                <h2 className="text-base font-semibold text-ink">{plan.name}</h2>
                 {current && <Badge>Current</Badge>}
               </div>
 
               <div className="mb-1 flex items-baseline gap-1.5">
-                <span className="text-2xl font-semibold text-gray-900">{plan.price}</span>
-                <span className="text-sm text-gray-500">{plan.cadence}</span>
+                <span className="text-2xl font-semibold text-ink">{plan.price}</span>
+                <span className="text-sm text-ink-muted">{plan.cadence}</span>
               </div>
-              <p className="mb-4 text-sm text-gray-500">{plan.blurb}</p>
+              <p className="mb-4 text-sm text-ink-muted">{plan.blurb}</p>
 
               <ul className="mb-5 space-y-2">
                 {plan.features.map((feature) => (
-                  <li key={feature} className="flex gap-2 text-sm text-gray-700">
-                    <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
+                  <li key={feature} className="flex gap-2 text-sm text-ink-secondary">
+                    <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-positive" />
                     {feature}
                   </li>
                 ))}

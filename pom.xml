@@ -48,10 +48,6 @@
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-data-rest</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-kafka</artifactId>
 		</dependency>
 		<dependency>
@@ -119,6 +115,32 @@
 			<scope>test</scope>
 		</dependency>
 		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-webmvc-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!-- @DataJpaTest: repository slice tests, and the Flyway migration test against PostgreSQL -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-jpa-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!--
+			TestRestTemplate, for the auth flow test that drives the running app over HTTP.
+			Boot 4 split these out, and TestRestTemplate needs RestTemplateBuilder from
+			spring-boot-restclient at runtime.
+		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-resttestclient</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-restclient</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
 			<groupId>org.springframework.kafka</groupId>
 			<artifactId>spring-kafka-test</artifactId>
 			<scope>test</scope>
@@ -133,6 +155,26 @@
 			<artifactId>spring-restdocs-mockmvc</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!--
+			TestContainers: real PostgreSQL for the Flyway migration test. The migrations are
+			PostgreSQL-only, so H2 can't run them. Versions come from the Spring Boot BOM.
+			(No Kafka container: nothing in the codebase produces or consumes yet.)
+		-->
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>testcontainers-postgresql</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>testcontainers-junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!--
+			AssertJ comes from spring-boot-starter-test; it was previously pinned to 3.24.1 here,
+			which downgraded it. JavaFaker was dropped with the random test data it generated:
+			the project is unmaintained and pulled in an old snakeyaml.
+		-->
 	</dependencies>
 	<dependencyManagement>
 		<dependencies>
@@ -172,6 +214,40 @@
 						<version>${spring-restdocs.version}</version>
 					</dependency>
 				</dependencies>
+			</plugin>
+			<!--
+				Coverage. `./mvnw test` writes target/jacoco.exec; `./mvnw verify` also renders
+				target/site/jacoco/index.html. Generated code (Lombok, DTOs, config) is excluded so
+				the number reflects hand-written logic.
+			-->
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>0.8.15</version>
+				<configuration>
+					<excludes>
+						<exclude>**/DashboardApplication.class</exclude>
+						<exclude>**/config/**</exclude>
+						<exclude>**/*DTO.class</exclude>
+						<exclude>**/*Request.class</exclude>
+						<exclude>**/*Response.class</exclude>
+					</excludes>
+				</configuration>
+				<executions>
+					<execution>
+						<id>prepare-agent</id>
+						<goals>
+							<goal>prepare-agent</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>report</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>report</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>

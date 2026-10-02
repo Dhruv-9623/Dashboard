@@ -7,9 +7,10 @@ import { StatusBadge, ActionBadge } from './StatusBadge'
 import { PageHeader } from '@/components/PageHeader'
 import { ScoreDial } from '@/components/ScoreDial'
 import { EmptyState } from '@/components/EmptyState'
+import { AiOrb } from '@/components/ai/AiOrb'
 import { ErrorState } from '@/components/ErrorState'
 import { Card } from '@/components/ui/Card'
-import { Button } from '@/components/ui/Button'
+import { buttonClass } from '@/components/ui/Button'
 import { Tabs } from '@/components/ui/Tabs'
 import { SkeletonRows } from '@/components/ui/Skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table'
@@ -42,11 +43,9 @@ export const ReviewQueuePage = () => {
         title="Deal Triage"
         description="Every opportunity is scored against your thesis on intake. Approve or reject from the queue."
         actions={
-          <Link to="/deal-triage/new">
-            <Button>
-              <PlusIcon className="mr-2 h-4 w-4" />
-              New opportunity
-            </Button>
+          <Link to="/deal-triage/new" className={buttonClass()}>
+            <PlusIcon className="mr-2 h-4 w-4" aria-hidden="true" />
+            New opportunity
           </Link>
         }
       />
@@ -86,7 +85,8 @@ export const ReviewQueuePage = () => {
         <ErrorState error={query.error} onRetry={() => query.refetch()} />
       ) : visible.length === 0 ? (
         <EmptyState
-          icon={<InboxIcon className="h-6 w-6" />}
+          scene={<AiOrb size={116} />}
+          icon={<InboxIcon className="size-6" />}
           title={filter === 'ALL' ? 'No opportunities yet' : 'Nothing in this bucket'}
           description={
             filter === 'ALL'
@@ -94,11 +94,9 @@ export const ReviewQueuePage = () => {
               : 'Try another tab, or log a new opportunity.'
           }
           action={
-            <Link to="/deal-triage/new">
-              <Button>
-                <PlusIcon className="mr-2 h-4 w-4" />
-                New opportunity
-              </Button>
+            <Link to="/deal-triage/new" className={buttonClass()}>
+              <PlusIcon className="mr-2 h-4 w-4" aria-hidden="true" />
+              New opportunity
             </Link>
           }
         />
@@ -122,24 +120,31 @@ export const ReviewQueuePage = () => {
                     <ScoreDial score={deal.fitScore} size="sm" />
                   </TableCell>
                   <TableCell>
-                    <span className="font-medium text-gray-900">{deal.companyName}</span>
+                    {/* A real link so the row is reachable by keyboard; the row click stays as a mouse shortcut. */}
+                    <Link
+                      to={`/deal-triage/${deal.id}`}
+                      onClick={(event) => event.stopPropagation()}
+                      className="font-medium text-ink hover:text-brand-ink hover:underline focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                    >
+                      {deal.companyName}
+                    </Link>
                     {deal.website && (
-                      <span className="mt-0.5 block truncate text-xs text-gray-500">
+                      <span className="mt-0.5 block truncate text-xs text-ink-muted">
                         {deal.website}
                       </span>
                     )}
                   </TableCell>
-                  <TableCell className="text-sm text-gray-600">
+                  <TableCell className="text-sm text-ink-secondary">
                     {deal.sector} · {stageLabel(deal.stage)}
                   </TableCell>
-                  <TableCell className="text-sm tabular-nums text-gray-600">
+                  <TableCell className="text-sm tabular-nums text-ink-secondary">
                     {formatMoney(deal.askAmount, deal.currency)}
                   </TableCell>
                   <TableCell>
                     {deal.recommendedAction ? (
                       <ActionBadge action={deal.recommendedAction} />
                     ) : (
-                      <span className="text-sm text-gray-400">—</span>
+                      <span className="text-sm text-ink-muted">—</span>
                     )}
                   </TableCell>
                   <TableCell>

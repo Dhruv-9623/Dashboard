@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
 import { Select } from '@/components/ui/Select'
 import { Label, FieldHint } from '@/components/ui/Label'
-import { Button } from '@/components/ui/Button'
+import { Button, buttonClass } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import { SparkIcon } from '@/components/icons'
 import { errorMessage } from '@/components/ErrorState'
@@ -66,8 +66,8 @@ export const NewOpportunityPage = () => {
         title="New opportunity"
         description="The scoring agent runs automatically once this is saved."
         actions={
-          <Link to="/deal-triage">
-            <Button variant="outline">Cancel</Button>
+          <Link to="/deal-triage" className={buttonClass({ variant: 'outline' })}>
+            Cancel
           </Link>
         }
       />

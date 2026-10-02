@@ -7,14 +7,24 @@ interface ErrorStateProps {
   onRetry?: () => void
 }
 
-export const errorMessage = (error: unknown, fallback = 'Something went wrong.') =>
-  error instanceof Error ? error.message : fallback
+const NETWORK_MESSAGE = "Can't reach the server. Check your connection and try again."
+
+export const errorMessage = (error: unknown, fallback = 'Something went wrong.') => {
+  // Browsers report network failures as a bare "Failed to fetch" / "Load failed" TypeError.
+  if (error instanceof TypeError && /fetch|load failed|network/i.test(error.message)) {
+    return NETWORK_MESSAGE
+  }
+  return error instanceof Error && error.message ? error.message : fallback
+}
 
 export const ErrorState = ({ title = 'Could not load this view', error, onRetry }: ErrorStateProps) => (
-  <div className="flex flex-col items-center justify-center rounded-lg border border-red-200 bg-red-50 px-6 py-12 text-center">
-    <WarningIcon className="mb-3 h-8 w-8 text-red-500" />
-    <h3 className="text-base font-semibold text-red-900">{title}</h3>
-    <p className="mt-1.5 max-w-md text-sm text-red-700">{errorMessage(error)}</p>
+  <div
+    role="alert"
+    className="flex flex-col items-center justify-center rounded-lg border border-[color-mix(in_oklab,var(--negative)_25%,transparent)] bg-negative-subtle px-6 py-12 text-center"
+  >
+    <WarningIcon className="mb-3 h-8 w-8 text-negative" aria-hidden="true" />
+    <h3 className="text-base font-semibold text-negative">{title}</h3>
+    <p className="mt-1.5 max-w-md text-sm text-negative">{errorMessage(error)}</p>
     {onRetry && (
       <Button variant="outline" className="mt-5" onClick={onRetry}>
         Try again

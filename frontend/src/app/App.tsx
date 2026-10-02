@@ -3,6 +3,8 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { queryClient } from '@/lib/query-client'
 import { Loading } from '@/components/Loading'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { ToastProvider } from '@/components/ui/Toast'
 import { LandingPage } from '@/routes/LandingPage'
 import { ProtectedRoute } from '@/routes/ProtectedRoute'
 import { RequireEntity, RequireNoEntity } from '@/routes/OnboardingGuards'
@@ -42,66 +44,70 @@ const SettingsPage = named(() => import('@/features/settings/SettingsPage'), 'Se
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <Suspense fallback={<Loading />}>
-          <Routes>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/account-type-selection" element={<AccountTypeSelectionPage />} />
+      <ToastProvider>
+        <BrowserRouter>
+          <ErrorBoundary>
+            <Suspense fallback={<Loading />}>
+              <Routes>
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/account-type-selection" element={<AccountTypeSelectionPage />} />
 
-            <Route
-              element={
-                <ProtectedRoute>
-                  <RequireNoEntity />
-                </ProtectedRoute>
-              }
-            >
-              <Route path="/onboarding/firm" element={<SetupFirmPage />} />
-              <Route path="/onboarding/startup" element={<SetupStartupPage />} />
-            </Route>
+                <Route
+                  element={
+                    <ProtectedRoute>
+                      <RequireNoEntity />
+                    </ProtectedRoute>
+                  }
+                >
+                  <Route path="/onboarding/firm" element={<SetupFirmPage />} />
+                  <Route path="/onboarding/startup" element={<SetupStartupPage />} />
+                </Route>
 
-            <Route
-              element={
-                <ProtectedRoute>
-                  <RequireEntity />
-                </ProtectedRoute>
-              }
-            >
-              <Route element={<AppShell />}>
-                <Route path="/dashboard" element={<DashboardPage />} />
-                <Route path="/insights" element={<InsightsPage />} />
+                <Route
+                  element={
+                    <ProtectedRoute>
+                      <RequireEntity />
+                    </ProtectedRoute>
+                  }
+                >
+                  <Route element={<AppShell />}>
+                    <Route path="/dashboard" element={<DashboardPage />} />
+                    <Route path="/insights" element={<InsightsPage />} />
 
-                {/* VC side */}
-                <Route path="/investments" element={<InvestmentsPage />} />
-                <Route path="/pool" element={<PoolPage />} />
-                <Route path="/deal-flow" element={<DealFlowPage />} />
-                <Route path="/outreach" element={<OutreachPage />} />
-                <Route path="/deal-triage" element={<ReviewQueuePage />} />
-                <Route path="/deal-triage/new" element={<NewOpportunityPage />} />
-                <Route path="/deal-triage/:id" element={<OpportunityDetailPage />} />
-                <Route path="/conflict-sentinel" element={<ConflictSentinelPage />} />
-                <Route path="/pulse" element={<PulsePage />} />
-                <Route path="/compare" element={<ComparisonPage />} />
+                    {/* VC side */}
+                    <Route path="/investments" element={<InvestmentsPage />} />
+                    <Route path="/pool" element={<PoolPage />} />
+                    <Route path="/deal-flow" element={<DealFlowPage />} />
+                    <Route path="/outreach" element={<OutreachPage />} />
+                    <Route path="/deal-triage" element={<ReviewQueuePage />} />
+                    <Route path="/deal-triage/new" element={<NewOpportunityPage />} />
+                    <Route path="/deal-triage/:id" element={<OpportunityDetailPage />} />
+                    <Route path="/conflict-sentinel" element={<ConflictSentinelPage />} />
+                    <Route path="/pulse" element={<PulsePage />} />
+                    <Route path="/compare" element={<ComparisonPage />} />
 
-                {/* Startup side */}
-                <Route path="/funding" element={<FundingPage />} />
+                    {/* Startup side */}
+                    <Route path="/funding" element={<FundingPage />} />
 
-                {/* Shared */}
-                <Route path="/discover" element={<DiscoverPage />} />
-                <Route path="/messages" element={<MessagesPage />} />
-                <Route path="/wishlist" element={<WishlistPage />} />
-                <Route path="/events" element={<EventsPage />} />
-                <Route path="/signals" element={<SignalsPage />} />
-                <Route path="/suggestions" element={<SuggestionsPage />} />
-                <Route path="/startups/:id" element={<StartupDetailPage />} />
-                <Route path="/firms/:id" element={<VCFirmDetailPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-              </Route>
-            </Route>
+                    {/* Shared */}
+                    <Route path="/discover" element={<DiscoverPage />} />
+                    <Route path="/messages" element={<MessagesPage />} />
+                    <Route path="/wishlist" element={<WishlistPage />} />
+                    <Route path="/events" element={<EventsPage />} />
+                    <Route path="/signals" element={<SignalsPage />} />
+                    <Route path="/suggestions" element={<SuggestionsPage />} />
+                    <Route path="/startups/:id" element={<StartupDetailPage />} />
+                    <Route path="/firms/:id" element={<VCFirmDetailPage />} />
+                    <Route path="/settings" element={<SettingsPage />} />
+                  </Route>
+                </Route>
 
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
-      </BrowserRouter>
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Suspense>
+          </ErrorBoundary>
+        </BrowserRouter>
+      </ToastProvider>
     </QueryClientProvider>
   )
 }

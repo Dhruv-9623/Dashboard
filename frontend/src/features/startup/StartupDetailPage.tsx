@@ -9,7 +9,8 @@ import { Avatar } from '@/components/Avatar'
 import { StatTile } from '@/components/StatTile'
 import { ErrorState } from '@/components/ErrorState'
 import { Card, CardContent } from '@/components/ui/Card'
-import { Button } from '@/components/ui/Button'
+import { buttonClass } from '@/components/ui/Button'
+import { safeUrl } from '@/lib/utils'
 import { Badge } from '@/components/ui/Badge'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { FileIcon, MailIcon } from '@/components/icons'
@@ -28,7 +29,12 @@ export const StartupDetailPage = () => {
 
   if (query.isLoading) return <Skeleton className="h-96 w-full" />
   if (query.isError || !query.data) {
-    return <ErrorState error={query.error ?? new Error('Startup not found')} />
+    return (
+      <ErrorState
+        error={query.error ?? new Error('Startup not found')}
+        onRetry={query.isError ? () => query.refetch() : undefined}
+      />
+    )
   }
 
   const startup = query.data
@@ -41,11 +47,9 @@ export const StartupDetailPage = () => {
         actions={
           isVC ? (
             <>
-              <Link to={`/outreach?startupId=${startup.id}`}>
-                <Button variant="outline">
-                  <MailIcon className="mr-2 h-4 w-4" />
-                  Outreach
-                </Button>
+              <Link to={`/outreach?startupId=${startup.id}`} className={buttonClass({ variant: 'outline' })}>
+                <MailIcon className="mr-2 h-4 w-4" aria-hidden="true" />
+                Outreach
               </Link>
               <ConnectButton targetType="STARTUP" targetId={startup.id} targetName={startup.name} />
             </>
@@ -65,12 +69,12 @@ export const StartupDetailPage = () => {
                     <Badge variant="secondary">{stageLabel(startup.stage)}</Badge>
                     <Badge variant="secondary">{startup.sector}</Badge>
                   </div>
-                  {startup.website && (
+                  {safeUrl(startup.website) && (
                     <a
-                      href={startup.website}
+                      href={safeUrl(startup.website)}
                       target="_blank"
                       rel="noreferrer noopener"
-                      className="mt-2 inline-block text-sm text-blue-600 hover:underline"
+                      className="mt-2 inline-block text-sm text-brand-ink hover:underline"
                     >
                       {startup.website}
                     </a>
@@ -79,7 +83,7 @@ export const StartupDetailPage = () => {
               </div>
 
               {startup.description && (
-                <p className="mt-5 text-sm leading-relaxed text-gray-700">{startup.description}</p>
+                <p className="mt-5 text-sm leading-relaxed text-ink-secondary">{startup.description}</p>
               )}
             </CardContent>
           </Card>
@@ -98,12 +102,15 @@ export const StartupDetailPage = () => {
           {startup.pitchDeckUrl && (
             <Card>
               <CardContent className="py-5">
-                <h2 className="mb-3 text-sm font-semibold text-gray-900">Materials</h2>
-                <a href={startup.pitchDeckUrl} target="_blank" rel="noreferrer noopener">
-                  <Button variant="outline" className="w-full">
-                    <FileIcon className="mr-2 h-4 w-4" />
-                    Pitch deck
-                  </Button>
+                <h2 className="mb-3 text-sm font-semibold text-ink">Materials</h2>
+                <a
+                  href={safeUrl(startup.pitchDeckUrl)}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className={buttonClass({ variant: 'outline', className: 'w-full' })}
+                >
+                  <FileIcon className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Pitch deck
                 </a>
               </CardContent>
             </Card>
@@ -111,19 +118,19 @@ export const StartupDetailPage = () => {
 
           <Card>
             <CardContent className="py-5">
-              <h2 className="mb-3 text-sm font-semibold text-gray-900">At a glance</h2>
-              <dl className="divide-y divide-gray-100 text-sm">
+              <h2 className="mb-3 text-sm font-semibold text-ink">At a glance</h2>
+              <dl className="divide-y divide-line text-sm">
                 <div className="flex justify-between py-2">
-                  <dt className="text-gray-500">Sector</dt>
-                  <dd className="font-medium text-gray-900">{startup.sector}</dd>
+                  <dt className="text-ink-muted">Sector</dt>
+                  <dd className="font-medium text-ink">{startup.sector}</dd>
                 </div>
                 <div className="flex justify-between py-2">
-                  <dt className="text-gray-500">Stage</dt>
-                  <dd className="font-medium text-gray-900">{stageLabel(startup.stage)}</dd>
+                  <dt className="text-ink-muted">Stage</dt>
+                  <dd className="font-medium text-ink">{stageLabel(startup.stage)}</dd>
                 </div>
                 <div className="flex justify-between py-2">
-                  <dt className="text-gray-500">Location</dt>
-                  <dd className="font-medium text-gray-900">{startup.location ?? '—'}</dd>
+                  <dt className="text-ink-muted">Location</dt>
+                  <dd className="font-medium text-ink">{startup.location ?? '—'}</dd>
                 </div>
               </dl>
             </CardContent>

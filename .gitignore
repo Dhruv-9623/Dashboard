@@ -1,5 +1,10 @@
 HELP.md
 target/
+
+### Local secrets (OAuth client secrets, ANTHROPIC_API_KEY) ###
+.env
+.env.*
+!.env.example
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
@@ -39,3 +44,8 @@ build/
 node_modules/
 package.json
 package-lock.json
+# …except the frontend's: `npm ci` needs it, and CI installs from it.
+!frontend/package-lock.json
+
+# Local dev process logs and pids (scripts/dev-up.sh)
+.dev/

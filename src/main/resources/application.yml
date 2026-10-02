@@ -1,5 +1,8 @@
 app:
   frontend-url: ${FRONTEND_URL:http://localhost:3000}
+  cors:
+    # Comma-separated. Set CORS_ALLOWED_ORIGINS per environment.
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3001,http://localhost:3002}
 
 spring:
   application:
@@ -35,10 +38,6 @@ spring:
       port: ${REDIS_PORT:6379}
       timeout: 2000ms
 
-  # Session Configuration (Redis-backed)
-  session:
-    store-type: redis
-
   # Kafka Configuration
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
@@ -73,12 +72,17 @@ spring:
               - profile
               - email
             redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+            # LinkedIn expects client credentials in the request body.
+            client-authentication-method: client_secret_post
         provider:
+          # LinkedIn "Sign In with LinkedIn using OpenID Connect" endpoints. Listed explicitly
+          # rather than via issuer-uri so startup does not depend on a discovery request.
           linkedin:
             authorization-uri: https://www.linkedin.com/oauth/v2/authorization
             token-uri: https://www.linkedin.com/oauth/v2/accessToken
-            user-info-uri: https://api.linkedin.com/v2/me
-            user-name-attribute: id
+            user-info-uri: https://api.linkedin.com/v2/userinfo
+            jwk-set-uri: https://www.linkedin.com/oauth/openid/jwks
+            user-name-attribute: sub
 
   # Spring AI Configuration
   ai:
@@ -95,7 +99,7 @@ logging:
   level:
     root: INFO
     com.VentureCapitals.Dashboard: DEBUG
-    org.springframework.security: DEBUG
-    org.springframework.web: DEBUG
+    org.springframework.security: INFO
+    org.springframework.web: INFO
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"

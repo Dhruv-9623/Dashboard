@@ -7,10 +7,10 @@ interface AlertProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 const variants = {
-  info: 'border-blue-200 bg-blue-50 text-blue-900',
-  success: 'border-green-200 bg-green-50 text-green-900',
-  warning: 'border-amber-200 bg-amber-50 text-amber-900',
-  danger: 'border-red-200 bg-red-50 text-red-900',
+  info: 'border-brand-line bg-brand-subtle text-brand-ink',
+  success: 'border-[color-mix(in_oklab,var(--positive)_25%,transparent)] bg-positive-subtle text-positive',
+  warning: 'border-[color-mix(in_oklab,var(--notice)_25%,transparent)] bg-notice-subtle text-notice',
+  danger: 'border-[color-mix(in_oklab,var(--negative)_25%,transparent)] bg-negative-subtle text-negative',
 }
 
 export const Alert = ({ className, variant = 'info', title, children, ...props }: AlertProps) => (

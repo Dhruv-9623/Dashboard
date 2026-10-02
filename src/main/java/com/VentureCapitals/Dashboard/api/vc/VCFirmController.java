@@ -1,7 +1,6 @@
 package com.VentureCapitals.Dashboard.api.vc;
 
 import com.VentureCapitals.Dashboard.common.ApiResponse;
-import com.VentureCapitals.Dashboard.common.ErrorCode;
 import com.VentureCapitals.Dashboard.domain.user.User;
 import com.VentureCapitals.Dashboard.domain.vc.AddMemberRequest;
 import com.VentureCapitals.Dashboard.domain.vc.CreateVCFirmRequest;
@@ -53,22 +52,30 @@ public class VCFirmController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(firmDTO));
     }
 
-    @GetMapping("/{id}")
+    /** The signed-in VC's firm, or null data before firm setup (the frontend routes to onboarding). */
+    @GetMapping("/me")
     @PreAuthorize("hasRole('VC')")
-    public ResponseEntity<ApiResponse<VCFirmDTO>> getFirm(
-            @CurrentUser User user,
-            @PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<VCFirmDTO>> getMyFirm(@CurrentUser User user) {
+        VCFirmDTO firmDTO = vcFirmService.findFirmForUser(user.getId())
+                .map(vcFirmMapper::toDTO)
+                .orElse(null);
+        return ResponseEntity.ok(ApiResponse.ok(firmDTO));
+    }
 
-        VCFirm firm = vcFirmService.getFirm(id);
-        VCMember membership = vcFirmService.getUserFirmMembership(user.getId());
+    /** Investor discovery: any signed-in user (founders included) can search firm profiles. */
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<VCFirmDTO>>> searchFirms(
+            @RequestParam(required = false) String search) {
+        List<VCFirmDTO> firms = vcFirmService.searchFirms(search).stream()
+                .map(vcFirmMapper::toDTO)
+                .toList();
+        return ResponseEntity.ok(ApiResponse.ok(firms));
+    }
 
-        if (!membership.getFirm().getId().equals(id)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(ApiResponse.error(ErrorCode.UNAUTHORIZED,
-                            "You do not have access to this firm"));
-        }
-
-        VCFirmDTO firmDTO = vcFirmMapper.toDTO(firm);
+    /** Public firm profile, readable by any signed-in user. Members and editing stay restricted. */
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<VCFirmDTO>> getFirm(@PathVariable UUID id) {
+        VCFirmDTO firmDTO = vcFirmMapper.toDTO(vcFirmService.getFirm(id));
         return ResponseEntity.ok(ApiResponse.ok(firmDTO));
     }
 
@@ -91,14 +98,7 @@ public class VCFirmController {
             @CurrentUser User user,
             @PathVariable UUID id) {
 
-        VCMember membership = vcFirmService.getUserFirmMembership(user.getId());
-        if (!membership.getFirm().getId().equals(id)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(ApiResponse.error(ErrorCode.UNAUTHORIZED,
-                            "You do not have access to this firm"));
-        }
-
-        List<VCMember> members = vcFirmService.getFirmMembers(id);
+        List<VCMember> members = vcFirmService.getFirmMembers(user, id);
         List<VCMemberDTO> memberDTOs = members.stream()
                 .map(vcFirmMapper::toDTO)
                 .toList();
@@ -113,8 +113,7 @@ public class VCFirmController {
             @PathVariable UUID id,
             @Valid @RequestBody AddMemberRequest request) {
 
-        vcFirmService.addMember(id, user, request);
-        VCMember member = vcFirmService.getUserFirmMembership(request.getUserId());
+        VCMember member = vcFirmService.addMember(id, user, request);
         VCMemberDTO memberDTO = vcFirmMapper.toDTO(member);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(memberDTO));
@@ -128,12 +127,7 @@ public class VCFirmController {
             @PathVariable UUID memberId,
             @RequestParam VCRole newRole) {
 
-        vcFirmService.changeMemberRole(id, user, memberId, newRole);
-        VCMember member = vcFirmService.getFirmMembers(id).stream()
-                .filter(m -> m.getId().equals(memberId))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Member not found"));
-
+        VCMember member = vcFirmService.changeMemberRole(id, user, memberId, newRole);
         VCMemberDTO memberDTO = vcFirmMapper.toDTO(member);
         return ResponseEntity.ok(ApiResponse.ok(memberDTO));
     }

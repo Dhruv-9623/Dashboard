@@ -37,7 +37,6 @@ public class CurrentUserArgumentResolver implements HandlerMethodArgumentResolve
                                    NativeWebRequest webRequest, WebDataBinderFactory binderFactory) {
         // First, try to get user from Authentication principal (OAuth2 flow)
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        log.debug("CurrentUserArgumentResolver: authentication={}", authentication);
         if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedUserPrincipal) {
             AuthenticatedUserPrincipal principal = (AuthenticatedUserPrincipal) authentication.getPrincipal();
 
@@ -47,14 +46,13 @@ public class CurrentUserArgumentResolver implements HandlerMethodArgumentResolve
             if (user == null && principal.getUserId() != null) {
                 try {
                     user = userRepository.findById(UUID.fromString(principal.getUserId())).orElse(null);
-                    log.debug("CurrentUserArgumentResolver: Loaded user from DB using userId: {}",
-                        user != null ? user.getEmail() : "null");
+                    log.debug("CurrentUserArgumentResolver: Loaded user from DB using userId: {}", principal.getUserId());
                     return user;
                 } catch (Exception e) {
                     log.debug("CurrentUserArgumentResolver: Error loading user from userId: {}", e.getMessage());
                 }
             } else if (user != null) {
-                log.debug("CurrentUserArgumentResolver: Found principal with user: {}", user.getEmail());
+                log.debug("CurrentUserArgumentResolver: Found principal with user: {}", user.getId());
                 return user;
             }
         }
@@ -68,7 +66,7 @@ public class CurrentUserArgumentResolver implements HandlerMethodArgumentResolve
             if (userId != null) {
                 try {
                     User user = userRepository.findById(UUID.fromString(userId)).orElse(null);
-                    log.debug("CurrentUserArgumentResolver: Loaded user from DB: {}", user != null ? user.getEmail() : "null");
+                    log.debug("CurrentUserArgumentResolver: Loaded user from DB: {}", userId);
                     return user;
                 } catch (Exception e) {
                     log.error("CurrentUserArgumentResolver: Error loading user: {}", e.getMessage());

@@ -1,17 +1,24 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { authApi } from './api'
 import { UserType } from './types'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
+import { errorMessage } from '@/components/ErrorState'
+import { useDocumentTitle } from '@/lib/useDocumentTitle'
 
 export const AccountTypeSelectionPage = () => {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [selectedType, setSelectedType] = useState<UserType | null>(null)
+  useDocumentTitle('Choose account type')
 
   const mutation = useMutation({
     mutationFn: (userType: UserType) => authApi.completeAccountTypeSelection(userType),
-    onSuccess: () => {
+    onSuccess: (user) => {
+      // useAuth caches /me forever; without this the guards still see userType=null and
+      // bounce straight back to this page.
+      queryClient.setQueryData(['auth', 'me'], user)
       navigate('/dashboard')
     },
   })
@@ -22,13 +29,13 @@ export const AccountTypeSelectionPage = () => {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-50 px-4">
+    <main className="flex items-center justify-center min-h-screen bg-surface-sunken px-4">
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Choose Your Account Type</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-gray-600 mb-6">
+          <p className="text-ink-secondary mb-6">
             Are you a Venture Capitalist or a Startup?
           </p>
 
@@ -38,12 +45,12 @@ export const AccountTypeSelectionPage = () => {
               disabled={mutation.isPending}
               className={`w-full p-4 rounded-lg border-2 text-left transition-colors ${
                 selectedType === UserType.VC
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-200 hover:border-gray-300'
+                  ? 'border-brand bg-brand-subtle'
+                  : 'border-line hover:border-line-strong'
               }`}
             >
-              <h3 className="font-semibold text-gray-900">Venture Capitalist</h3>
-              <p className="text-sm text-gray-600">I invest in startups</p>
+              <h3 className="font-semibold text-ink">Venture Capitalist</h3>
+              <p className="text-sm text-ink-secondary">I invest in startups</p>
             </button>
 
             <button
@@ -51,26 +58,26 @@ export const AccountTypeSelectionPage = () => {
               disabled={mutation.isPending}
               className={`w-full p-4 rounded-lg border-2 text-left transition-colors ${
                 selectedType === UserType.STARTUP
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-200 hover:border-gray-300'
+                  ? 'border-brand bg-brand-subtle'
+                  : 'border-line hover:border-line-strong'
               }`}
             >
-              <h3 className="font-semibold text-gray-900">Startup Founder</h3>
-              <p className="text-sm text-gray-600">I'm building a company</p>
+              <h3 className="font-semibold text-ink">Startup Founder</h3>
+              <p className="text-sm text-ink-secondary">I'm building a company</p>
             </button>
           </div>
 
           {mutation.isPending && (
-            <p className="text-center text-sm text-gray-600 mt-4">Loading...</p>
+            <p className="text-center text-sm text-ink-secondary mt-4">Loading...</p>
           )}
 
           {mutation.isError && (
-            <p className="text-center text-sm text-red-600 mt-4">
-              An error occurred. Please try again.
+            <p role="alert" className="text-center text-sm text-negative mt-4">
+              {errorMessage(mutation.error, 'An error occurred. Please try again.')}
             </p>
           )}
         </CardContent>
       </Card>
-    </div>
+    </main>
   )
 }

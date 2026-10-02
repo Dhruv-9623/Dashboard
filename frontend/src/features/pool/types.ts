@@ -12,7 +12,8 @@ export interface PoolEntryDTO {
   companyName: string
   sector: string | null
   stage: string | null
-  addedByEmail: string
+  /** Null once the member who added it has left the firm. */
+  addedByEmail: string | null
   tags: string[]
   notes: string | null
   interestLevel: InterestLevel
@@ -35,11 +36,17 @@ export const interestLevelLabels: Record<InterestLevel, string> = {
   [InterestLevel.HIGH_PRIORITY]: 'High priority',
 }
 
+/**
+ * Interest is an intensity, not a status, so it climbs one scale:
+ * neutral → outlined brand → filled brand. It deliberately avoids amber, which
+ * this product uses for "something needs attention" and which read as a warning
+ * next to a real one.
+ */
 export const interestLevelVariants: Record<
   InterestLevel,
-  'secondary' | 'default' | 'warning'
+  'secondary' | 'outline' | 'default'
 > = {
   [InterestLevel.WATCHING]: 'secondary',
-  [InterestLevel.INTERESTED]: 'default',
-  [InterestLevel.HIGH_PRIORITY]: 'warning',
+  [InterestLevel.INTERESTED]: 'outline',
+  [InterestLevel.HIGH_PRIORITY]: 'default',
 }

@@ -1,8 +1,15 @@
-import { fetchApi } from '@/lib/api-client'
-import type { PoolEntryDTO, UpsertPoolEntryRequest } from './types'
+import { fetchApi, withQuery } from '@/lib/api-client'
+import type { PageParams, PageResponse } from '@/lib/api-client'
+import type { InterestLevel, PoolEntryDTO, UpsertPoolEntryRequest } from './types'
+
+export interface PoolListParams extends PageParams {
+  interestLevel?: InterestLevel
+}
 
 export const poolApi = {
-  list: () => fetchApi<PoolEntryDTO[]>('/api/pool'),
+  /** The signed-in VC's firm's pool, most recently added first. */
+  list: (params: PoolListParams = {}) =>
+    fetchApi<PageResponse<PoolEntryDTO>>(withQuery('/api/pool', { ...params })),
 
   create: (request: UpsertPoolEntryRequest) =>
     fetchApi<PoolEntryDTO>('/api/pool', {
@@ -20,5 +27,7 @@ export const poolApi = {
 }
 
 export const poolKeys = {
+  /** Prefix for everything pool-related: invalidate this after any write. */
   all: ['pool'] as const,
+  list: (params: PoolListParams) => ['pool', 'list', params] as const,
 }

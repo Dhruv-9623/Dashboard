@@ -9,9 +9,11 @@ import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
 import { Select } from '@/components/ui/Select'
-import { Label } from '@/components/ui/Label'
+import { Label, FieldError } from '@/components/ui/Label'
 import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
+import { useToast } from '@/components/ui/Toast'
+import { useFieldErrors } from '@/lib/useFieldErrors'
 import { CURRENCIES } from '@/lib/constants'
 import { errorMessage } from '@/components/ErrorState'
 
@@ -55,6 +57,7 @@ export const InvestmentForm = ({ open, onClose, investment }: InvestmentFormProp
   })
 
   const queryClient = useQueryClient()
+  const toast = useToast()
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -72,11 +75,14 @@ export const InvestmentForm = ({ open, onClose, investment }: InvestmentFormProp
         ? investmentApi.update(investment.id, payload)
         : investmentApi.create(payload)
     },
-    onSuccess: () => {
+    onSuccess: (saved) => {
       queryClient.invalidateQueries({ queryKey: investmentKeys.all })
+      toast.success(investment ? `Updated the ${saved.startupName} position` : `Recorded ${saved.startupName}`)
       onClose()
     },
   })
+
+  const fields = useFieldErrors(mutation.error)
 
   const set = (key: keyof typeof form, value: string) =>
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -124,7 +130,11 @@ export const InvestmentForm = ({ open, onClose, investment }: InvestmentFormProp
               value={form.investmentDate}
               onChange={(event) => set('investmentDate', event.target.value)}
               required
+              {...fields.a11y('investmentDate', 'inv-date')}
             />
+            {fields.message('investmentDate') && (
+              <FieldError id={fields.errorId('inv-date')}>{fields.message('investmentDate')}</FieldError>
+            )}
           </div>
           <div>
             <Label htmlFor="inv-round">Round</Label>
@@ -158,7 +168,11 @@ export const InvestmentForm = ({ open, onClose, investment }: InvestmentFormProp
               value={form.amount}
               onChange={(event) => set('amount', event.target.value)}
               required
+              {...fields.a11y('amount', 'inv-amount')}
             />
+            {fields.message('amount') && (
+              <FieldError id={fields.errorId('inv-amount')}>{fields.message('amount')}</FieldError>
+            )}
           </div>
           <div>
             <Label htmlFor="inv-equity">Equity %</Label>
@@ -170,7 +184,11 @@ export const InvestmentForm = ({ open, onClose, investment }: InvestmentFormProp
               step="0.01"
               value={form.equityPercentage}
               onChange={(event) => set('equityPercentage', event.target.value)}
+              {...fields.a11y('equityPercentage', 'inv-equity')}
             />
+            {fields.message('equityPercentage') && (
+              <FieldError id={fields.errorId('inv-equity')}>{fields.message('equityPercentage')}</FieldError>
+            )}
           </div>
         </div>
 
@@ -192,10 +210,16 @@ export const InvestmentForm = ({ open, onClose, investment }: InvestmentFormProp
             value={form.notes}
             onChange={(event) => set('notes', event.target.value)}
             placeholder="Deal terms, board seat, latest metrics — Portfolio Pulse summarises this."
+            {...fields.a11y('notes', 'inv-notes')}
           />
+          {fields.message('notes') && (
+            <FieldError id={fields.errorId('inv-notes')}>{fields.message('notes')}</FieldError>
+          )}
         </div>
 
-        {mutation.isError && <Alert variant="danger">{errorMessage(mutation.error)}</Alert>}
+        {mutation.isError && (
+          <Alert variant="danger">{fields.summary((error) => errorMessage(error))}</Alert>
+        )}
       </form>
     </Modal>
   )
