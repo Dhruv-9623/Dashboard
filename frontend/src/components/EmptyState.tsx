@@ -7,6 +7,12 @@ interface EmptyStateProps {
   action?: React.ReactNode
   /** A second, quieter action — "learn more", "import instead". */
   secondaryAction?: React.ReactNode
+  /**
+   * An illustrated scene, shown instead of the ghost rows. Reserved for the few
+   * screens where the empty state explains a concept rather than just reporting
+   * that a list is empty — otherwise the illustrations become wallpaper.
+   */
+  scene?: React.ReactNode
   className?: string
 }
 
@@ -25,6 +31,7 @@ export const EmptyState = ({
   description,
   action,
   secondaryAction,
+  scene,
   className,
 }: EmptyStateProps) => (
   <div
@@ -64,27 +71,32 @@ export const EmptyState = ({
       )}
     </div>
 
-    {/* Ghost rows below the message, fading into the card's bottom edge: the
-        shape of what belongs here, so the empty screen teaches rather than
-        apologises. Never behind the text, where it would read as a glitch. */}
-    <div
-      aria-hidden="true"
-      className="pointer-events-none relative mx-auto mt-8 -mb-12 max-w-lg space-y-2"
-      style={{
-        maskImage: 'linear-gradient(to bottom, black 10%, transparent 90%)',
-        WebkitMaskImage: 'linear-gradient(to bottom, black 10%, transparent 90%)',
-      }}
-    >
-      {[0, 1, 2].map((row) => (
-        <div
-          key={row}
-          className="flex items-center gap-3 rounded-lg border border-line bg-surface-sunken/70 p-3"
-        >
-          <span className="size-7 shrink-0 rounded-md bg-line" />
-          <span className="h-2.5 flex-1 rounded-full bg-line" />
-          <span className="h-2.5 w-14 rounded-full bg-line" />
-        </div>
-      ))}
-    </div>
+    {/* A scene when the empty state is explaining a concept; otherwise ghost
+        rows below the message, fading into the card's bottom edge — the shape of
+        what belongs here, so the screen teaches rather than apologises. Never
+        behind the text, where it would read as a glitch. */}
+    {scene ? (
+      <div className="relative mt-6 flex justify-center">{scene}</div>
+    ) : (
+      <div
+        aria-hidden="true"
+        className="pointer-events-none relative mx-auto mt-8 -mb-12 max-w-lg space-y-2"
+        style={{
+          maskImage: 'linear-gradient(to bottom, black 10%, transparent 90%)',
+          WebkitMaskImage: 'linear-gradient(to bottom, black 10%, transparent 90%)',
+        }}
+      >
+        {[0, 1, 2].map((row) => (
+          <div
+            key={row}
+            className="flex items-center gap-3 rounded-lg border border-line bg-surface-sunken/70 p-3"
+          >
+            <span className="size-7 shrink-0 rounded-md bg-line" />
+            <span className="h-2.5 flex-1 rounded-full bg-line" />
+            <span className="h-2.5 w-14 rounded-full bg-line" />
+          </div>
+        ))}
+      </div>
+    )}
   </div>
 )

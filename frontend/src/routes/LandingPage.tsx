@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '@/features/auth/useAuth'
 import { authApi } from '@/features/auth/api'
 import { Button } from '@/components/ui/Button'
+import { MeetingScene } from '@/components/illustrations/MeetingScene'
 import { Input } from '@/components/ui/Input'
 import { Loading } from '@/components/Loading'
 import { useDocumentTitle } from '@/lib/useDocumentTitle'
@@ -52,11 +53,25 @@ export const LandingPage = () => {
   }
 
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 px-4">
-      <div className="w-full max-w-md p-8 bg-surface rounded-lg shadow-lg">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-ink mb-2">Dashboard</h1>
-          <p className="text-ink-secondary">Connect VCs and Startups</p>
+    <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-canvas px-4 py-10">
+      {/* A wash behind the card, so the first screen isn't a white box on grey. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[520px]"
+        style={{
+          background:
+            'radial-gradient(760px circle at 50% -10%, color-mix(in oklab, var(--brand) 16%, transparent), transparent 70%)',
+        }}
+      />
+
+      <div className="relative w-full max-w-md rounded-2xl border border-line bg-surface p-8 shadow-overlay">
+        <div className="mb-8 text-center">
+          {/* The product in one picture, on the one screen everybody sees. */}
+          <MeetingScene className="mx-auto mb-4 max-w-[280px]" />
+          <h1 className="mb-1.5 text-[28px] font-semibold tracking-[-0.02em] text-ink">Dashboard</h1>
+          <p className="text-[13px] text-ink-secondary">
+            Where India's investors and founders find each other.
+          </p>
         </div>
 
         {!isTestMode && (

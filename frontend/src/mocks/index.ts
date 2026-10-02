@@ -415,16 +415,24 @@ const SCENARIO_KEY = 'mock-scenario'
  *
  * The design review had to inject these from the browser console; this makes them shareable URLs.
  */
-type Scenario = 'off' | 'error' | 'empty' | 'slow'
+type Scenario = 'off' | 'error' | 'empty' | 'slow' | 'signedout'
 
 const readScenario = (): Scenario => {
   const fromUrl = new URLSearchParams(window.location.search).get('mock')
-  if (fromUrl === 'error' || fromUrl === 'empty' || fromUrl === 'slow' || fromUrl === 'off') {
+  if (
+    fromUrl === 'error' ||
+    fromUrl === 'empty' ||
+    fromUrl === 'slow' ||
+    fromUrl === 'signedout' ||
+    fromUrl === 'off'
+  ) {
     sessionStorage.setItem(SCENARIO_KEY, fromUrl)
     return fromUrl
   }
   const stored = sessionStorage.getItem(SCENARIO_KEY)
-  return stored === 'error' || stored === 'empty' || stored === 'slow' ? stored : 'off'
+  return stored === 'error' || stored === 'empty' || stored === 'slow' || stored === 'signedout'
+    ? stored
+    : 'off'
 }
 
 /** Strips a scenario's data down to nothing, whatever shape the endpoint returns. */
@@ -467,6 +475,16 @@ export function installMocks() {
       // sign-in and no page renders in the state being looked at.
       const isSession = /^\/api\/(auth|vc\/firms\/me|startups\/me)/.test(url.pathname)
 
+      // …except when signed-out is the state being looked at. `?mock=signedout`
+      // refuses the session so the landing and sign-in screens can be worked on
+      // without a backend.
+      if (scenario === 'signedout' && url.pathname === '/api/auth/me') {
+        return new Response(
+          JSON.stringify({ success: false, errorCode: 'UNAUTHORIZED', message: 'Not signed in' }),
+          { status: 401, headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
       if (scenario === 'error' && !isSession) {
         return new Response(
           JSON.stringify({
@@ -494,6 +512,6 @@ export function installMocks() {
   console.info(
     `[mocks] Serving fixture data as a ${userType === 'startup' ? 'STARTUP' : 'VC'} user` +
       (scenario === 'off' ? '' : ` in "${scenario}" mode`) + '. ' +
-      `Switch with ?as=startup / ?as=vc, and ?mock=error | empty | slow | off`
+      `Switch with ?as=startup / ?as=vc, and ?mock=error | empty | slow | signedout | off`
   )
 }

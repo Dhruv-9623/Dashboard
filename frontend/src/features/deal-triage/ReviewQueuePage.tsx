@@ -7,6 +7,7 @@ import { StatusBadge, ActionBadge } from './StatusBadge'
 import { PageHeader } from '@/components/PageHeader'
 import { ScoreDial } from '@/components/ScoreDial'
 import { EmptyState } from '@/components/EmptyState'
+import { AiOrb } from '@/components/ai/AiOrb'
 import { ErrorState } from '@/components/ErrorState'
 import { Card } from '@/components/ui/Card'
 import { buttonClass } from '@/components/ui/Button'
@@ -84,7 +85,8 @@ export const ReviewQueuePage = () => {
         <ErrorState error={query.error} onRetry={() => query.refetch()} />
       ) : visible.length === 0 ? (
         <EmptyState
-          icon={<InboxIcon className="h-6 w-6" />}
+          scene={<AiOrb size={116} />}
+          icon={<InboxIcon className="size-6" />}
           title={filter === 'ALL' ? 'No opportunities yet' : 'Nothing in this bucket'}
           description={
             filter === 'ALL'

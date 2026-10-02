@@ -1,6 +1,6 @@
 # Remaining Work
 
-_Last updated: 26 Sep 2026. Passes so far: the frontend, backend and design reviews; fixes; backend groundwork + Startup/Investment/Pool build-out; testing + one-command local setup; the design-system rebuild, the charts + hero pass, the Insights rebuild, and the company view + illustration._
+_Last updated: 26 Sep 2026. Passes so far: the frontend, backend and design reviews; fixes; backend groundwork + Startup/Investment/Pool build-out; testing + one-command local setup; the design-system rebuild, the charts + hero pass, the Insights rebuild, the company view, and the illustration set + Insights filters._
 
 **How to run and test any of this: `TESTING.md`.** `scripts/dev-up.sh` brings the whole stack up with demo accounts; `scripts/test-all.sh` runs everything that doesn't need a running app.
 
@@ -396,6 +396,43 @@ a founder on the right with a rocket, a path drawing between them and a spark wh
   in the way, so it stops.
 
 Verification: **82 tests pass**, build clean, 34 page loads with 0 console errors and 0 overflow.
+
+---
+
+## Done in the eighth pass (26 Sep 2026) — Insights filters, and the illustration set
+
+### Insights: filters and the dimensions it was missing
+| Change | Why |
+|---|---|
+| **Filter bar: range · sector · status · round**, held in the URL | A filtered view is the thing you send a partner (`?sector=Fintech&range=all`), and coming back from a company keeps your slice instead of resetting. Options are built from the data in hand, so the page never offers a filter that would empty it |
+| **Shape-of-book metrics** — average and median cheque, largest-position concentration (named), months since last cheque | Size was covered; shape wasn't. Concentration over 40% and a gap over 6 months both turn amber |
+| **By round**, in round sequence rather than by size | Seed → Series A → Series B is a progression; sorting it by size destroys the thing you're reading for |
+| **Pipeline behind the book** — the pool by interest level | A firm's pool is half its activity and Insights never showed it |
+| The sector chart now reads the filters | It was showing the server's unfiltered totals directly under a filter bar |
+
+Verified by driving the URLs: `sector=Fintech` narrows to Fintech; `status=EXITED&range=all` surfaces only the 2023 Climate exit.
+
+### The illustration set
+Four placements, chosen from a measurement of dead space on every page rather than a guess, and
+**one scene per concept** — the scenes work because they are rare and they mean something.
+
+| Where | Scene | Why there |
+|---|---|---|
+| **Sign-in** | `MeetingScene`, larger | The plainest screen in the product and the first anyone sees. Its gradient was also still on raw palette classes — the codemod never covered `from-*`/`to-*` — so it's on tokens now |
+| **Messages, no conversations** | `HandshakeScene` | Mutual consent *is* the handshake. Both arms arrive on the same beat, because "both sides" is the rule |
+| **Outreach, nothing sent** | `OutreachScene` | A note crossing to someone who hasn't connected. The recipient is drawn dashed and faded — at this point they're someone you're reaching *towards*. The note rides the real path via `createMotionPath`, so it banks into the curve |
+| **Wishlist, nothing saved** | `ShortlistScene` | The saved card leaves the stack rather than being highlighted in it, which is what a wishlist does |
+| **Deal Triage, empty queue** | The **orb**, not a character | What happens there is a model scoring deals. Giving it the AI mark keeps the two visual languages from blurring |
+
+`EmptyState` grew a `scene` slot, so these are opt-in per screen and every other empty state keeps
+the ghost-row treatment. All scenes share `useScene`, which enforces the two rules: nothing runs
+under `prefers-reduced-motion`, and every timeline is reverted on unmount.
+
+**New harness scenario: `?mock=signedout`** — the mock shim replaces `window.fetch`, so network
+interception can't reach it and the signed-out screens were unreachable without a backend. This was
+already on the backlog as `?mock=firstrun`.
+
+Verification: 82 tests pass, build clean, 34 page loads with 0 console errors and 0 overflow.
 
 ---
 

@@ -83,6 +83,7 @@ condition of the API:
 | `?mock=error` | Every call fails with a 500 — checks error cards and retry |
 | `?mock=empty` | Every list comes back empty — checks empty states |
 | `?mock=slow` | Four-second responses — checks skeletons and disabled buttons |
+| `?mock=signedout` | Refuses the session — the landing and sign-in screens, with no backend |
 | `?mock=off` | Back to normal |
 
 Dark mode is stored in `localStorage` under `dashboard-theme` (`light` / `dark` / `system`), so a

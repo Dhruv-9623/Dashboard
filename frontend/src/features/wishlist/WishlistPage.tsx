@@ -5,6 +5,7 @@ import { WishlistTargetType } from './types'
 import { PageHeader } from '@/components/PageHeader'
 import { Avatar } from '@/components/Avatar'
 import { EmptyState } from '@/components/EmptyState'
+import { ShortlistScene } from '@/components/illustrations/ShortlistScene'
 import { ErrorState } from '@/components/ErrorState'
 import { Card, CardContent } from '@/components/ui/Card'
 import { buttonClass } from '@/components/ui/Button'
@@ -38,9 +39,10 @@ export const WishlistPage = () => {
         <ErrorState error={query.error} onRetry={() => query.refetch()} />
       ) : items.length === 0 ? (
         <EmptyState
-          icon={<HeartIcon className="h-6 w-6" />}
+          icon={<HeartIcon className="size-6" />}
           title="Nothing saved yet"
-          description="Tap the heart on any profile in Discover to save it here."
+          description="Tap the heart on any profile in Discover to set it aside here. Only you can see this list."
+          scene={<ShortlistScene />}
           action={
             <Link to="/discover" className={buttonClass()}>
               Go to Discover

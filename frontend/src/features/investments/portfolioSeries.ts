@@ -196,3 +196,75 @@ export function sparkValues(series: TimePoint[], count = 12): number[] {
   if (series.length < 2) return []
   return series.slice(-count).map((point) => point.value)
 }
+
+/**
+ * Capital by round, in the platform's own round order rather than by size.
+ *
+ * Order matters here in a way it doesn't for sectors: Seed → Series A → Series B
+ * is a progression, so the reader expects to see it in sequence and to read the
+ * shape of the book across it.
+ */
+export function roundExposure(
+  investments: InvestmentDTO[],
+  currency: string,
+  order: readonly string[]
+): CategoryPoint[] {
+  const totals = new Map<string, number>()
+  for (const investment of investments) {
+    if (investment.currency !== currency) continue
+    totals.set(investment.round, (totals.get(investment.round) ?? 0) + investment.amount)
+  }
+
+  const sum = [...totals.values()].reduce((a, b) => a + b, 0)
+  if (sum === 0) return []
+
+  return order
+    .filter((round) => totals.has(round))
+    .map((round) => ({
+      label: round,
+      value: totals.get(round) ?? 0,
+      share: (totals.get(round) ?? 0) / sum,
+    }))
+}
+
+/** Headline numbers about the shape of the book, not its size. */
+export function concentration(investments: InvestmentDTO[], currency: string) {
+  const relevant = investments.filter((investment) => investment.currency === currency)
+  if (relevant.length === 0) {
+    return { average: 0, median: 0, largestShare: 0, topName: null as string | null }
+  }
+
+  const amounts = relevant.map((investment) => investment.amount).sort((a, b) => a - b)
+  const total = amounts.reduce((a, b) => a + b, 0)
+  const middle = Math.floor(amounts.length / 2)
+
+  // Per company, not per cheque: two follow-ons in one name concentrate the book.
+  const perCompany = new Map<string, { name: string; amount: number }>()
+  for (const investment of relevant) {
+    const existing = perCompany.get(investment.startupId)
+    if (existing) existing.amount += investment.amount
+    else perCompany.set(investment.startupId, { name: investment.startupName, amount: investment.amount })
+  }
+  const largest = [...perCompany.values()].sort((a, b) => b.amount - a.amount)[0]
+
+  return {
+    average: total / amounts.length,
+    median:
+      amounts.length % 2 === 0
+        ? (amounts[middle - 1] + amounts[middle]) / 2
+        : amounts[middle],
+    largestShare: total > 0 ? largest.amount / total : 0,
+    topName: largest.name,
+  }
+}
+
+/** Whole months since the most recent cheque — a freshness signal for the pace. */
+export function monthsSinceLastDeal(investments: InvestmentDTO[], now = new Date()): number | null {
+  if (investments.length === 0) return null
+  const latest = investments
+    .map((investment) => investment.investmentDate)
+    .sort()
+    .at(-1)!
+  const [year, month] = latest.slice(0, 7).split('-').map(Number)
+  return (now.getFullYear() - year) * 12 + (now.getMonth() + 1 - month)
+}

@@ -7,6 +7,7 @@ import { useAuth } from '@/features/auth/useAuth'
 import { PageHeader } from '@/components/PageHeader'
 import { Avatar } from '@/components/Avatar'
 import { EmptyState } from '@/components/EmptyState'
+import { HandshakeScene } from '@/components/illustrations/HandshakeScene'
 import { ErrorState, errorMessage } from '@/components/ErrorState'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -56,7 +57,7 @@ const ConnectionRequests = () => {
         <ErrorState error={query.error} onRetry={() => query.refetch()} />
       ) : requests.length === 0 ? (
         <EmptyState
-          icon={<MessageIcon className="h-6 w-6" />}
+          icon={<MessageIcon className="size-6" />}
           title={direction === 'incoming' ? 'No requests received' : 'No requests sent'}
           description="Chat unlocks only after both sides opt in, so requests appear here first."
         />
@@ -258,9 +259,10 @@ const Conversations = () => {
   if (conversations.length === 0) {
     return (
       <EmptyState
-        icon={<MessageIcon className="h-6 w-6" />}
+        icon={<MessageIcon className="size-6" />}
         title="No conversations yet"
-        description="A conversation opens automatically once a connection request is accepted by both sides."
+        description="A conversation opens the moment a connection request is accepted — by both sides. Neither of you can message the other before that."
+        scene={<HandshakeScene />}
       />
     )
   }

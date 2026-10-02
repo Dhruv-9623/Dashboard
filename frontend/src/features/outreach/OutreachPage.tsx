@@ -8,6 +8,7 @@ import type { StartupDTO } from '@/features/startup/types'
 import { StartupPicker } from '@/components/StartupPicker'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyState } from '@/components/EmptyState'
+import { OutreachScene } from '@/components/illustrations/OutreachScene'
 import { ErrorState, errorMessage } from '@/components/ErrorState'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -163,9 +164,10 @@ export const OutreachPage = () => {
         <ErrorState error={query.error} onRetry={() => query.refetch()} />
       ) : messages.length === 0 ? (
         <EmptyState
-          icon={<MailIcon className="h-6 w-6" />}
+          icon={<MailIcon className="size-6" />}
           title="No outreach sent"
-          description="Reach out to a startup that hasn't connected with your firm yet."
+          description="Reach out to a startup that hasn't connected with your firm yet. They'll see who you are before they reply."
+          scene={<OutreachScene />}
           action={
             <Button
               onClick={() => {

@@ -1,15 +1,24 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { insightsApi, insightsKeys } from './api'
 import { useAuth } from '@/features/auth/useAuth'
 import { UserType } from '@/features/auth/types'
 import { investmentApi, investmentKeys } from '@/features/investments/api'
 import {
+  concentration,
   cumulativeDeployed,
   dealsPerQuarter,
   dominantCurrency,
+  monthsSinceLastDeal,
+  roundExposure,
+  sectorExposure,
   sparkValues,
 } from '@/features/investments/portfolioSeries'
+import { InvestmentRound } from '@/features/investments/types'
+import { poolApi, poolKeys } from '@/features/pool/api'
+import { InterestLevel, interestLevelLabels } from '@/features/pool/types'
+import { InsightsFilterBar } from './InsightsFilterBar'
+import { applyFilters, useInsightsFilters } from './useInsightsFilters'
 import { PageHeader } from '@/components/PageHeader'
 import { MetricCard } from '@/components/MetricCard'
 import { ErrorState } from '@/components/ErrorState'
@@ -23,16 +32,16 @@ import { HeatGrid } from '@/components/charts/HeatGrid'
 import { ScatterPlot } from '@/components/charts/ScatterPlot'
 import { RankedBars } from '@/components/charts/RankedBars'
 import { CompanyBreakdown } from '@/components/charts/CompanyBreakdown'
-import { RangeFilter, withinRange } from '@/components/charts/RangeFilter'
-import type { RangeKey } from '@/components/charts/RangeFilter'
+import { withinRange } from '@/components/charts/RangeFilter'
 import { ChartIcon } from '@/components/icons'
 import { formatMoney, formatMoneyShort, pluralize } from '@/lib/constants'
+import { roundLabels } from '@/features/investments/types'
 import { useEntrance } from '@/lib/useMotion'
 
 export const InsightsPage = () => {
   const { user } = useAuth()
   const isStartup = user?.userType === UserType.STARTUP
-  const [range, setRange] = useState<RangeKey>('24m')
+  const { filters, setFilter, clear, activeCount } = useInsightsFilters()
 
   const query = useQuery({ queryKey: insightsKeys.all, queryFn: insightsApi.get })
 
@@ -45,11 +54,33 @@ export const InsightsPage = () => {
     enabled: !isStartup,
   })
 
+  // The pool is the other half of a firm's activity, and Insights never showed it.
+  const poolParams = { size: 100 }
+  const pool = useQuery({
+    queryKey: poolKeys.list(poolParams),
+    queryFn: () => poolApi.list(poolParams),
+    enabled: !isStartup,
+  })
+
   const metrics = useEntrance<HTMLDivElement>(query.data ? 'loaded' : 'loading')
 
-  const records = useMemo(
-    () => withinRange(ledger.data?.items ?? [], range, (item) => item.investmentDate),
-    [ledger.data, range]
+  /** Everything in the window, before the dimension filters — the filter bar's own options come from this. */
+  const inRange = useMemo(
+    () => withinRange(ledger.data?.items ?? [], filters.range, (item) => item.investmentDate),
+    [ledger.data, filters.range]
+  )
+  const records = useMemo(() => applyFilters(inRange, filters), [inRange, filters])
+
+  const sectorOptionsInData = useMemo(
+    () => [...new Set(inRange.map((item) => item.startupSector?.trim() || 'Unspecified'))].sort(),
+    [inRange]
+  )
+  const roundOptionsInData = useMemo(
+    () =>
+      Object.values(InvestmentRound).filter((round) =>
+        inRange.some((item) => item.round === round)
+      ),
+    [inRange]
   )
 
   const currency = dominantCurrency(records) ?? query.data?.currency ?? 'INR'
@@ -58,6 +89,31 @@ export const InsightsPage = () => {
 
   const deployment = useMemo(() => cumulativeDeployed(records, currency), [records, currency])
   const pace = useMemo(() => dealsPerQuarter(records), [records])
+  const sectors = useMemo(() => sectorExposure(records, currency), [records, currency])
+  const rounds = useMemo(
+    () => roundExposure(records, currency, Object.values(InvestmentRound)),
+    [records, currency]
+  )
+  const shape = useMemo(() => concentration(records, currency), [records, currency])
+  const staleness = useMemo(() => monthsSinceLastDeal(records), [records])
+
+  /** The pipeline behind the portfolio, by how warm each name is. */
+  const pipeline = useMemo(() => {
+    const entries = pool.data?.items ?? []
+    const counts = new Map<InterestLevel, number>()
+    for (const entry of entries) {
+      counts.set(entry.interestLevel, (counts.get(entry.interestLevel) ?? 0) + 1)
+    }
+    const total = entries.length
+    // Warmest first: the order is the scale, not the size.
+    return [InterestLevel.HIGH_PRIORITY, InterestLevel.INTERESTED, InterestLevel.WATCHING]
+      .filter((level) => counts.has(level))
+      .map((level) => ({
+        label: interestLevelLabels[level],
+        value: counts.get(level) ?? 0,
+        share: total > 0 ? (counts.get(level) ?? 0) / total : 0,
+      }))
+  }, [pool.data])
 
   /** One cell per month: how many cheques were written in it. */
   const activity = useMemo(() => {
@@ -140,8 +196,18 @@ export const InsightsPage = () => {
             ? 'How investors are engaging with your profile and round.'
             : 'How founders are engaging with your firm, and where your capital sits.'
         }
-        actions={!isStartup ? <RangeFilter value={range} onChange={setRange} /> : undefined}
       />
+
+      {!isStartup && (
+        <InsightsFilterBar
+          filters={filters}
+          setFilter={setFilter}
+          clear={clear}
+          activeCount={activeCount}
+          sectors={sectorOptionsInData}
+          rounds={roundOptionsInData}
+        />
+      )}
 
       <div ref={metrics} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
@@ -173,6 +239,36 @@ export const InsightsPage = () => {
         />
       </div>
 
+      {!isStartup && records.length > 0 && (
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <MetricCard
+            label="Average cheque"
+            value={money(shape.average)}
+            hint={`Median ${money(shape.median)}`}
+          />
+          <MetricCard
+            label="Largest position"
+            value={`${Math.round(shape.largestShare * 100)}%`}
+            hint={shape.topName ? `${shape.topName}, the largest holding` : undefined}
+            tone={shape.largestShare > 0.4 ? 'notice' : 'default'}
+          />
+          <MetricCard
+            label="Since last cheque"
+            value={staleness === null ? '—' : staleness === 0 ? 'This month' : `${staleness} mo`}
+            hint="Within the selected range"
+            tone={staleness !== null && staleness >= 6 ? 'notice' : 'default'}
+          />
+          <MetricCard
+            label="Companies"
+            count={{
+              to: new Set(records.map((record) => record.startupId)).size,
+              format: (value) => String(Math.round(value)),
+            }}
+            hint={pluralize(records.length, 'cheque')}
+          />
+        </div>
+      )}
+
       <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_1fr]">
         <ChartFrame
           title="Engagement funnel"
@@ -191,32 +287,46 @@ export const InsightsPage = () => {
 
         <ChartFrame
           title={isStartup ? 'Commitments by sector' : 'Portfolio by sector'}
-          description={`Capital by sector in ${data.currency}, across everything on record.`}
+          description={
+            isStartup
+              ? `Capital by sector in ${data.currency}, across everything on record.`
+              : `Capital by sector in ${currency}, for the slice selected above.`
+          }
+          stale={!isStartup && ledger.isFetching && !ledger.isLoading}
           table={{
-            columns: ['Sector', `Capital (${data.currency})`],
-            rows: data.sectorBreakdown.map((entry) => [
-              `${entry.sector} (${pluralize(entry.count, 'deal')})`,
-              formatMoney(entry.amount, data.currency),
-            ]),
+            columns: ['Sector', `Capital (${isStartup ? data.currency : currency})`],
+            rows: (isStartup
+              ? data.sectorBreakdown.map((entry) => ({
+                  label: entry.sector,
+                  value: entry.amount,
+                }))
+              : sectors
+            ).map((entry) => [entry.label, formatMoney(entry.value, isStartup ? data.currency : currency)]),
           }}
         >
-          {data.sectorBreakdown.length > 0 ? (
-            <RankedBars
-              // Sorted here: the server returns its own order, and a "ranked"
-              // list that isn't ranked is worse than an unsorted one.
-              items={[...data.sectorBreakdown]
-                .sort((a, b) => b.amount - a.amount)
-                .map((entry) => ({
-                  label: `${entry.sector} · ${pluralize(entry.count, 'deal')}`,
-                  value: entry.amount,
-                  share:
-                    entry.amount /
-                    data.sectorBreakdown.reduce((sum, item) => sum + item.amount, 0),
-                }))}
-              format={(value) => formatMoney(value, data.currency)}
-            />
+          {isStartup ? (
+            data.sectorBreakdown.length > 0 ? (
+              <RankedBars
+                // Sorted here: the server returns its own order, and a "ranked"
+                // list that isn't ranked is worse than an unsorted one.
+                items={[...data.sectorBreakdown]
+                  .sort((a, b) => b.amount - a.amount)
+                  .map((entry) => ({
+                    label: `${entry.sector} · ${pluralize(entry.count, 'deal')}`,
+                    value: entry.amount,
+                    share:
+                      entry.amount /
+                      data.sectorBreakdown.reduce((sum, item) => sum + item.amount, 0),
+                  }))}
+                format={(value) => formatMoney(value, data.currency)}
+              />
+            ) : (
+              <ChartEmpty message="Sector mix appears once there are commitments to compare." />
+            )
+          ) : sectors.length > 0 ? (
+            <RankedBars items={sectors} format={money} />
           ) : (
-            <ChartEmpty message="Sector mix appears once there are positions to compare." />
+            <ChartEmpty message="No positions in this slice. Clear a filter, or widen the range." />
           )}
         </ChartFrame>
       </div>
@@ -322,6 +432,60 @@ export const InsightsPage = () => {
             </ChartFrame>
           </div>
         </>
+      )}
+
+      {!isStartup && (
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <ChartFrame
+            title="By round"
+            description="Capital by round, in sequence rather than by size."
+            stale={ledger.isFetching && !ledger.isLoading}
+            table={{
+              columns: ['Round', `Capital (${currency})`],
+              rows: rounds.map((round) => [
+                roundLabels[round.label as keyof typeof roundLabels] ?? round.label,
+                money(round.value),
+              ]),
+            }}
+          >
+            {rounds.length > 0 ? (
+              <RankedBars
+                items={rounds.map((round) => ({
+                  ...round,
+                  label: roundLabels[round.label as keyof typeof roundLabels] ?? round.label,
+                }))}
+                format={money}
+                limit={8}
+              />
+            ) : (
+              <ChartEmpty message="No positions in this slice." />
+            )}
+          </ChartFrame>
+
+          <ChartFrame
+            title="Pipeline behind the book"
+            description="Companies in your pool, by how warm each one is. Not affected by the filters above."
+            stale={pool.isFetching && !pool.isLoading}
+            aside={
+              pool.data ? (
+                <span className="label-micro tabular">{pool.data.totalElements} tracked</span>
+              ) : undefined
+            }
+            table={{
+              columns: ['Interest', 'Companies'],
+              rows: pipeline.map((level) => [level.label, String(level.value)]),
+            }}
+          >
+            {pipeline.length > 0 ? (
+              <RankedBars
+                items={pipeline}
+                format={(value) => pluralize(value, 'company', 'companies')}
+              />
+            ) : (
+              <ChartEmpty message="Nothing in the pool yet. Tracked companies appear here." />
+            )}
+          </ChartFrame>
+        </div>
       )}
 
       {!isStartup && (
