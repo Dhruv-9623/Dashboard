@@ -107,7 +107,7 @@ export const SignalsPage = () => {
                   {subjectHref && subjectName && (
                     <Link
                       to={subjectHref}
-                      className="mt-2 inline-block text-sm text-brand-ink hover:underline"
+                      className="link-target mt-2 inline-block text-sm text-brand-ink hover:underline"
                     >
                       {subjectName}
                     </Link>

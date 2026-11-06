@@ -1,5 +1,12 @@
 package com.VentureCapitals.Dashboard.config;
 
+import com.VentureCapitals.Dashboard.domain.funding.CommitmentEvent;
+import com.VentureCapitals.Dashboard.domain.funding.CommitmentEventRepository;
+import com.VentureCapitals.Dashboard.domain.funding.CommitmentStatus;
+import com.VentureCapitals.Dashboard.domain.funding.FundingCommitment;
+import com.VentureCapitals.Dashboard.domain.funding.FundingCommitmentRepository;
+import com.VentureCapitals.Dashboard.domain.funding.FundingCycleRepository;
+import com.VentureCapitals.Dashboard.domain.funding.FundingCycleStatus;
 import com.VentureCapitals.Dashboard.domain.investment.InvestmentRepository;
 import com.VentureCapitals.Dashboard.domain.pool.PoolEntryRepository;
 import com.VentureCapitals.Dashboard.domain.startup.StartupRepository;
@@ -19,6 +26,11 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.utility.DockerImageName;
+
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -66,6 +78,12 @@ class DemoDataSeederTest extends PostgresContainerTest {
     @Autowired
     private PoolEntryRepository poolEntries;
     @Autowired
+    private FundingCycleRepository fundingCycles;
+    @Autowired
+    private FundingCommitmentRepository commitments;
+    @Autowired
+    private CommitmentEventRepository events;
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Test
@@ -83,10 +101,59 @@ class DemoDataSeederTest extends PostgresContainerTest {
 
     @Test
     void every_screen_has_something_to_show() {
-        assertThat(firms.count()).isEqualTo(1);
+        // Three firms: the demo workspace plus two co-investors, which exist so a round can have
+        // commitments from more than one name — the API allows one per firm.
+        assertThat(firms.count()).isEqualTo(3);
         assertThat(startups.count()).isEqualTo(4);
         assertThat(investments.count()).isEqualTo(3);
         assertThat(poolEntries.count()).isEqualTo(3);
+        assertThat(fundingCycles.count()).isEqualTo(2);
+        assertThat(commitments.count()).isEqualTo(3);
+    }
+
+    @Test
+    void the_seeded_round_shows_all_three_commitment_bands() {
+        // The progress ladder is only worth looking at if the demo exercises every band.
+        assertThat(commitments.findAll())
+                .extracting(commitment -> commitment.getStatus())
+                .containsExactlyInAnyOrder(
+                        CommitmentStatus.COMMITTED,
+                        CommitmentStatus.SOFT_COMMITTED,
+                        CommitmentStatus.INDICATED);
+
+        assertThat(fundingCycles.findAll())
+                .extracting(cycle -> cycle.getStatus())
+                .containsExactlyInAnyOrder(FundingCycleStatus.OPEN, FundingCycleStatus.CLOSED);
+    }
+
+    @Test
+    void the_seeded_round_has_a_history_to_chart() {
+        // The momentum chart reads the event log and nothing else, so a demo whose commitments
+        // were inserted without events shows a funded round next to an empty chart.
+        assertThat(events.count()).isEqualTo(6);
+        assertThat(events.findAll())
+                .filteredOn(CommitmentEvent::isCreation)
+                .hasSize(3)
+                .allSatisfy(event -> assertThat(event.getFromAmount()).isNull());
+    }
+
+    @Test
+    void replaying_the_seeded_history_lands_on_the_bands_the_round_reports() {
+        // The point of the assertion: two sources describe the same money — the commitments and
+        // the events — and a demo where they disagree makes the chart contradict the progress bar
+        // on the same screen.
+        Map<UUID, CommitmentEvent> latest = new HashMap<>();
+        events.findAll().stream()
+                .sorted(Comparator.comparing(CommitmentEvent::getOccurredAt))
+                .forEach(event -> latest.put(event.getCommitment().getId(), event));
+
+        assertThat(latest).hasSize(3);
+        for (FundingCommitment commitment : commitments.findAll()) {
+            CommitmentEvent last = latest.get(commitment.getId());
+            assertThat(last).as("every seeded pledge has history").isNotNull();
+            assertThat(last.getToStatus()).isEqualTo(commitment.getStatus());
+            assertThat(last.getToAmount()).isEqualTo(commitment.getAmount());
+        }
     }
 
     @Test

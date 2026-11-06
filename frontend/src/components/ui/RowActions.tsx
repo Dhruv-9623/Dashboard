@@ -54,7 +54,9 @@ export const RowActions = ({ label, actions }: RowActionsProps) => {
           <DotsIcon className="size-4" aria-hidden="true" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-44">
+      {/* Sized to the longest action label rather than fixed at w-44, where "Record as
+          investment" wrapped onto two lines. */}
+      <DropdownMenuContent align="end" className="min-w-52">
         {regular.map((action) =>
           action.to ? (
             <DropdownMenuItem key={action.label} asChild>

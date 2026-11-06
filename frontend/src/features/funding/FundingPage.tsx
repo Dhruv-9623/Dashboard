@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { fundingApi, fundingKeys } from './api'
 import {
   CommitmentStatus,
@@ -8,42 +9,57 @@ import {
   commitmentStatusVariants,
   cycleStatusLabels,
   cycleStatusVariants,
+  ticketBandProblem,
 } from './types'
 import type { FundingCycleDTO } from './types'
 import { PageHeader } from '@/components/PageHeader'
-import { StatTile } from '@/components/StatTile'
 import { EmptyState } from '@/components/EmptyState'
+import { MetricCard } from '@/components/MetricCard'
+import { InvestmentRound, roundLabel, roundLabels } from '@/features/investments/types'
+import { RoundProgress } from './RoundProgress'
+import { likelyAmount } from './types'
 import { ErrorState, errorMessage } from '@/components/ErrorState'
 import { Card, CardContent } from '@/components/ui/Card'
-import { Button } from '@/components/ui/Button'
+import { Button, buttonClass } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Label } from '@/components/ui/Label'
 import { Alert } from '@/components/ui/Alert'
-import { Progress } from '@/components/ui/Progress'
 import { SkeletonRows } from '@/components/ui/Skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table'
 import { CoinsIcon, PlusIcon } from '@/components/icons'
-import { CURRENCIES, STAGES, formatDate, formatMoney } from '@/lib/constants'
+import { CURRENCIES, formatDate, formatMoney } from '@/lib/constants'
 
 const statusOptions = Object.values(FundingCycleStatus).map((status) => ({
   value: status,
   label: cycleStatusLabels[status],
 }))
 
-const roundOptions = STAGES.map((stage) => ({ value: stage.label, label: stage.label }))
+/**
+ * Rounds, not startup stages — and the value is the enum the API stores.
+ *
+ * This previously sent the display label ("Series A") as the value, built from the STAGES list.
+ * It worked only because the mock accepted any string; the real endpoint rejects it.
+ */
+const roundOptions = Object.values(InvestmentRound).map((round) => ({
+  value: round,
+  label: roundLabels[round],
+}))
 
 const CycleModal = ({
   cycle,
+  openRoundElsewhere,
   onClose,
 }: {
   cycle: FundingCycleDTO | null
+  /** Another round of this startup's is already OPEN, so this one can't be. */
+  openRoundElsewhere: boolean
   onClose: () => void
 }) => {
   const [form, setForm] = useState({
-    roundType: cycle?.roundType ?? 'Seed',
+    roundType: cycle?.roundType ?? 'SEED',
     targetAmount: cycle?.targetAmount?.toString() ?? '',
     currency: cycle?.currency ?? 'INR',
     minTicketSize: cycle?.minTicketSize?.toString() ?? '',
@@ -56,6 +72,8 @@ const CycleModal = ({
   const queryClient = useQueryClient()
 
   const mutation = useMutation({
+    // Reported in place, so it opts out of the global error toast.
+    meta: { errorToast: false },
     mutationFn: () => {
       const payload = {
         roundType: form.roundType,
@@ -78,6 +96,22 @@ const CycleModal = ({
   const set = (key: keyof typeof form, value: string) =>
     setForm((prev) => ({ ...prev, [key]: value }))
 
+  /**
+   * Why this round would be refused, or null.
+   *
+   * Both rules are enforced by the server and one of them by a CHECK constraint as well, but
+   * neither reached the founder until they pressed Save — so a ₹9 Cr minimum with a ₹4 Cr maximum
+   * looked accepted, and "Open a round" looked available while a round was already open.
+   */
+  const problem =
+    ticketBandProblem(
+      form.minTicketSize ? Number(form.minTicketSize) : null,
+      form.maxTicketSize ? Number(form.maxTicketSize) : null,
+    ) ??
+    (form.status === FundingCycleStatus.OPEN && openRoundElsewhere
+      ? 'Another round is already open. Close or pause it first.'
+      : null)
+
   return (
     <Modal
       open
@@ -92,7 +126,7 @@ const CycleModal = ({
           <Button
             form="cycle-form"
             type="submit"
-            disabled={!form.targetAmount || mutation.isPending}
+            disabled={!form.targetAmount || Boolean(problem) || mutation.isPending}
           >
             {mutation.isPending ? 'Saving…' : cycle ? 'Save changes' : 'Open round'}
           </Button>
@@ -103,7 +137,7 @@ const CycleModal = ({
         id="cycle-form"
         onSubmit={(event) => {
           event.preventDefault()
-          if (form.targetAmount) mutation.mutate()
+          if (form.targetAmount && !problem) mutation.mutate()
         }}
         className="space-y-4"
       >
@@ -198,6 +232,7 @@ const CycleModal = ({
           />
         </div>
 
+        {problem && <Alert variant="warning">{problem}</Alert>}
         {mutation.isError && <Alert variant="danger">{errorMessage(mutation.error)}</Alert>}
       </form>
     </Modal>
@@ -215,7 +250,15 @@ const Commitments = ({ cycleId }: { cycleId: string }) => {
   const update = useMutation({
     mutationFn: ({ id, status }: { id: string; status: CommitmentStatus }) =>
       fundingApi.updateCommitment(id, status),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: fundingKeys.commitments(cycleId) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: fundingKeys.commitments(cycleId) })
+      // The bands and the investor count live on the round, not on the commitment, so promoting
+      // a pledge has to refetch the round as well. Without this the cards and the progress bar
+      // kept the old figures until something else happened to invalidate them — saving the Edit
+      // dialog, which is why it looked like only Edit worked.
+      queryClient.invalidateQueries({ queryKey: fundingKeys.mine })
+      queryClient.invalidateQueries({ queryKey: fundingKeys.history(cycleId) })
+    },
   })
 
   const commitments = query.data ?? []
@@ -281,13 +324,15 @@ const Commitments = ({ cycleId }: { cycleId: string }) => {
 export const FundingPage = () => {
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<FundingCycleDTO | null>(null)
-  const [expanded, setExpanded] = useState<string | null>(null)
 
   const query = useQuery({ queryKey: fundingKeys.mine, queryFn: fundingApi.listMine })
 
   const cycles = query.data ?? []
   const open = cycles.find((cycle) => cycle.status === FundingCycleStatus.OPEN)
-  const totalRaised = cycles.reduce((total, cycle) => total + cycle.committedAmount, 0)
+  const currency = cycles[0]?.currency ?? 'INR'
+  // Signed money and the forecast are different numbers, and the difference is the point.
+  const totalCommitted = cycles.reduce((total, cycle) => total + cycle.committedAmount, 0)
+  const openLikely = open ? likelyAmount(open) : 0
 
   return (
     <>
@@ -308,17 +353,32 @@ export const FundingPage = () => {
       />
 
       {cycles.length > 0 && (
-        <div className="mb-6 grid gap-4 sm:grid-cols-3">
-          <StatTile
-            label="Total committed"
-            value={formatMoney(totalRaised, cycles[0]?.currency ?? 'INR')}
+        <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <MetricCard
+            label="Committed"
+            value={formatMoney(totalCommitted, currency)}
+            hint="Signed across every round"
+            accent="var(--viz-2)"
+            emphasis
           />
-          <StatTile
-            label="Current round"
-            value={open ? open.roundType : '—'}
-            hint={open ? formatMoney(open.targetAmount, open.currency) + ' target' : undefined}
+          <MetricCard
+            label="Open round"
+            value={roundLabel(open?.roundType)}
+            hint={open ? `${formatMoney(open.targetAmount, open.currency)} target` : 'None open'}
+            accent="var(--viz-1)"
           />
-          <StatTile label="Rounds run" value={cycles.length} />
+          <MetricCard
+            label="Likely to land"
+            value={open ? formatMoney(openLikely, open.currency) : '—'}
+            hint="Committed plus soft, excluding indications"
+            accent="var(--viz-3)"
+          />
+          <MetricCard
+            label="Investors"
+            count={{ to: open?.commitmentCount ?? 0, format: (value) => String(Math.round(value)) }}
+            hint="On the open round"
+            accent="var(--viz-5)"
+          />
         </div>
       )}
 
@@ -346,17 +406,20 @@ export const FundingPage = () => {
       ) : (
         <div className="space-y-4">
           {cycles.map((cycle) => {
-            const progress = cycle.targetAmount
-              ? (cycle.committedAmount / cycle.targetAmount) * 100
-              : 0
-
             return (
               <Card key={cycle.id}>
                 <CardContent className="py-5">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <div className="flex items-center gap-2">
-                        <h2 className="text-base font-semibold text-ink">{cycle.roundType}</h2>
+                        <h2 className="text-base font-semibold text-ink">
+                          <Link
+                            to={`/rounds/${cycle.id}`}
+                            className="link-target inline-block hover:text-brand-ink hover:underline"
+                          >
+                            {roundLabel(cycle.roundType)}
+                          </Link>
+                        </h2>
                         <Badge variant={cycleStatusVariants[cycle.status]}>
                           {cycleStatusLabels[cycle.status]}
                         </Badge>
@@ -366,45 +429,34 @@ export const FundingPage = () => {
                         {cycle.closedAt ? ` · closed ${formatDate(cycle.closedAt)}` : ''}
                       </p>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setEditing(cycle)
-                        setModalOpen(true)
-                      }}
-                    >
-                      Edit
-                    </Button>
+                    <div className="flex gap-2">
+                      <Link
+                        to={`/rounds/${cycle.id}`}
+                        className={buttonClass({ variant: 'secondary', size: 'sm' })}
+                      >
+                        History
+                      </Link>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditing(cycle)
+                          setModalOpen(true)
+                        }}
+                      >
+                        Edit
+                      </Button>
+                    </div>
                   </div>
 
-                  <div className="mt-4">
-                    <div className="flex items-baseline justify-between text-sm">
-                      <span className="font-medium text-ink">
-                        {formatMoney(cycle.committedAmount, cycle.currency)}
-                      </span>
-                      <span className="text-ink-muted">
-                        of {formatMoney(cycle.targetAmount, cycle.currency)}
-                      </span>
-                    </div>
-                    <Progress className="mt-2" value={progress} tone="green" />
+                  <RoundProgress cycle={cycle} className="mt-4" percent />
+
+                  {/* Not behind a toggle any more. Who has pledged, and how firmly, is the whole
+                      reason a founder opens this page — hiding it behind "Show 3 commitments"
+                      made the answer cost a click and gave the count no context. */}
+                  <div className="mt-4 overflow-hidden rounded border border-line">
+                    <Commitments cycleId={cycle.id} />
                   </div>
-
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="mt-3 -ml-3"
-                    onClick={() => setExpanded(expanded === cycle.id ? null : cycle.id)}
-                  >
-                    {expanded === cycle.id ? 'Hide' : 'Show'} {cycle.commitmentCount} commitment
-                    {cycle.commitmentCount === 1 ? '' : 's'}
-                  </Button>
-
-                  {expanded === cycle.id && (
-                    <div className="mt-3 overflow-hidden rounded border border-line">
-                      <Commitments cycleId={cycle.id} />
-                    </div>
-                  )}
                 </CardContent>
               </Card>
             )
@@ -415,6 +467,8 @@ export const FundingPage = () => {
       {modalOpen && (
         <CycleModal
           cycle={editing}
+          // Editing the open round itself isn't "another round being open".
+          openRoundElsewhere={open !== undefined && open.id !== editing?.id}
           onClose={() => {
             setModalOpen(false)
             setEditing(null)

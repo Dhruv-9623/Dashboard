@@ -55,6 +55,8 @@ export const FunnelChart = ({ stages, className }: FunnelChartProps) => {
         const width = Math.max((stage.count / top) * 100, 2)
         // Roughly the room a stage name needs before it would be clipped.
         const inside = width > 38
+        // The ramp has five steps; deeper funnels reuse the last one.
+        const step = Math.min(index + 1, 5)
 
         return (
           <li key={stage.label}>
@@ -82,26 +84,26 @@ export const FunnelChart = ({ stages, className }: FunnelChartProps) => {
                     // Each stage one step deeper down the sequential ramp: the
                     // funnel is an ordered scale, which is the one case where a
                     // ramp on categories is right.
-                    background: `var(--seq-${Math.min(index + 1, 5)})`,
+                    background: `var(--seq-${step})`,
                   }}
                 />
                 <div className="relative flex h-full items-center justify-between pr-3">
                   {/* Inside the fill when there's room for it; otherwise just
                       past the fill's end, so the text never straddles the edge. */}
                   <span
-                    className={cn(
-                      'truncate text-[13px] font-medium transition-[padding]',
-                      inside ? 'text-white' : 'text-ink'
-                    )}
-                    style={{ paddingLeft: inside ? '0.75rem' : `calc(${width}% + 0.75rem)` }}
+                    className="truncate text-[13px] font-medium transition-[padding]"
+                    style={{
+                      paddingLeft: inside ? '0.75rem' : `calc(${width}% + 0.75rem)`,
+                      // Each step needs its own label ink: the ramp's light end cannot
+                      // carry white, and which end is light flips with the theme.
+                      color: inside ? `var(--seq-${step}-ink)` : 'var(--ink)',
+                    }}
                   >
                     {stage.label}
                   </span>
                   <span
-                    className={cn(
-                      'shrink-0 pl-3 text-[13px] font-semibold tabular',
-                      width > 92 ? 'text-white' : 'text-ink'
-                    )}
+                    className="shrink-0 pl-3 text-[13px] font-semibold tabular"
+                    style={{ color: width > 92 ? `var(--seq-${step}-ink)` : 'var(--ink)' }}
                   >
                     {stage.count}
                   </span>

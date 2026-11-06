@@ -42,7 +42,10 @@ export interface InvestmentSummaryDTO {
   /** Whole-unit totals per ISO currency code; never summed across currencies. */
   totalsByCurrency: Record<string, number>
   totalCount: number
+  /** Active positions — one per cheque, so a follow-on counts twice. */
   activeCount: number
+  /** Active companies — one per startup however many cheques went into it. */
+  activeCompanyCount: number
   exitedCount: number
   writtenOffCount: number
 }
@@ -77,3 +80,12 @@ export const roundLabels: Record<InvestmentRound, string> = {
   [InvestmentRound.SECONDARY]: 'Secondary',
   [InvestmentRound.TERTIARY]: 'Tertiary',
 }
+
+/**
+ * Round enum → the label a human reads. Always go through this rather than the map:
+ * the round arrives from the API as a plain string, and every call site that indexed
+ * `roundLabels` directly had to repeat the same cast-and-fallback, which is how three
+ * places on the founder dashboard ended up printing a raw "SERIES_A".
+ */
+export const roundLabel = (round: string | null | undefined) =>
+  round ? roundLabels[round as InvestmentRound] ?? round : '—'

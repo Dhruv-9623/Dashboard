@@ -1,4 +1,5 @@
 import { makeDb } from './fixtures'
+import { bookTotals } from '@/features/funding/types'
 import type { MockDb } from './fixtures'
 
 // Dev-only fetch shim so the UI can be reviewed before the backend exists.
@@ -30,6 +31,105 @@ const paged = <T>(items: T[], url: URL) => {
     size,
     totalElements: items.length,
     totalPages: Math.max(Math.ceil(items.length / size), 1),
+  }
+}
+
+/**
+ * Recomputes a round's three bands from the commitments actually on it.
+ *
+ * The mock used to increment `committedAmount` on every POST regardless of the band, which made
+ * the fixture server disagree with the API it is standing in for.
+ */
+const recountCycle = (cycleId: string) => {
+  const cycle = db.cycles.find((c) => c.id === cycleId)
+  if (!cycle) return
+  // WITHDRAWN is excluded from every band and from the count, exactly as the API's
+  // sumByCycleAndStatus query does — a pledge an investor pulled must not inflate a round.
+  const own = db.commitments.filter(
+    (c) => c.fundingCycleId === cycleId && c.status !== 'WITHDRAWN'
+  )
+  const sum = (status: string) =>
+    own.filter((c) => c.status === status).reduce((total, c) => total + c.amount, 0)
+
+  cycle.committedAmount = sum('COMMITTED')
+  cycle.softCommittedAmount = sum('SOFT_COMMITTED')
+  cycle.indicatedAmount = sum('INDICATED')
+  cycle.commitmentCount = own.length
+}
+
+/** The round context the API attaches to a row on the firm's own book. */
+/**
+ * The fixture rounds carry their own band figures, and the fixture commitments imply a different
+ * set. Recomputing on startup makes the commitments the single source: a round, its investor list
+ * and its replayed history then agree, which the momentum chart depends on — it sits next to the
+ * progress bar, so any disagreement is visible on one screen.
+ */
+const reconcileCycles = () => db.cycles.forEach((cycle) => recountCycle(cycle.id))
+
+reconcileCycles()
+
+/**
+ * A refused write, in the shape the API refuses one: 409 with a sentence meant for the person.
+ *
+ * Every handler used to answer 200, which made it impossible to look at an error state that is
+ * part of the design — the convert and withdraw dialogs both render their own failure inline, and
+ * a mock that cannot fail cannot show that.
+ */
+const refuse = (message: string, status = 409) => ({ __refusal: { status, message } })
+
+/**
+ * Why this round would be refused, or null — the two rules FundingService checks on create and
+ * update. `excludeId` is the round being edited, which doesn't count against itself.
+ */
+const cycleProblem = (body: any, excludeId: string | null) => {
+  if (
+    body.minTicketSize != null &&
+    body.maxTicketSize != null &&
+    body.minTicketSize > body.maxTicketSize
+  ) {
+    return refuse("The minimum ticket size can't be larger than the maximum.")
+  }
+  if (body.status === 'OPEN') {
+    const alreadyOpen = db.cycles.find(
+      (c) => c.startupId === 's-1' && c.status === 'OPEN' && c.id !== excludeId
+    )
+    if (alreadyOpen) {
+      return refuse('You already have an open round. Close or pause it before opening another.')
+    }
+  }
+  return null
+}
+
+/** Appends to the event log, mirroring FundingService.recordEvent — including its no-op guard. */
+const recordEvent = (
+  commitment: { id: string; vcFirmId: string; vcFirmName: string; status: string; amount: number; currency: string },
+  previous: { status: string; amount: number } | null
+) => {
+  if (previous && previous.status === commitment.status && previous.amount === commitment.amount) return
+  db.commitmentEvents.push({
+    id: uid('ce'),
+    commitmentId: commitment.id,
+    vcFirmId: commitment.vcFirmId,
+    vcFirmName: commitment.vcFirmName,
+    fromStatus: previous ? previous.status : null,
+    toStatus: commitment.status,
+    fromAmount: previous ? previous.amount : null,
+    toAmount: commitment.amount,
+    currency: commitment.currency,
+    occurredAt: now(),
+  } as never)
+}
+
+const withRoundContext = <T extends { fundingCycleId: string }>(commitment: T) => {
+  const cycle = db.cycles.find((c) => c.id === commitment.fundingCycleId)
+  return {
+    ...commitment,
+    startupId: cycle?.startupId ?? null,
+    startupName: cycle?.startupName ?? null,
+    roundType: cycle?.roundType ?? null,
+    cycleStatus: cycle?.status ?? null,
+    cycleTargetAmount: cycle?.targetAmount ?? null,
+    cycleClosedAt: cycle?.closedAt ?? null,
   }
 }
 
@@ -123,10 +223,16 @@ const routes: Array<[string, RegExp, Handler]> = [
       totalsByCurrency[item.currency] = (totalsByCurrency[item.currency] ?? 0) + item.amount
     }
     const count = (status: string) => db.investments.filter((i) => i.status === status).length
+    // Distinct companies, like the real query: a follow-on is another position in a company
+    // already held, not another holding.
+    const activeCompanies = new Set(
+      db.investments.filter((i) => i.status === 'ACTIVE').map((i) => i.startupId)
+    ).size
     return {
       totalsByCurrency,
       totalCount: db.investments.length,
       activeCount: count('ACTIVE'),
+      activeCompanyCount: activeCompanies,
       exitedCount: count('EXITED'),
       writtenOffCount: count('WRITTEN_OFF'),
     }
@@ -170,43 +276,175 @@ const routes: Array<[string, RegExp, Handler]> = [
   }],
 
   // ---- funding ----
+  // Paged, like the real endpoint: deal flow spans the whole market.
   ['GET', /^\/api\/funding-cycles\/open$/, ({ url }) => {
     const sector = url.searchParams.get('sector')
     const stage = url.searchParams.get('stage')
-    return db.cycles.filter(
-      (c) =>
-        c.status === 'OPEN' &&
-        (!sector || c.startupSector === sector) &&
-        (!stage || c.startupStage === stage)
+    return paged(
+      db.cycles.filter(
+        (c) =>
+          c.status === 'OPEN' &&
+          (!sector || c.startupSector === sector) &&
+          (!stage || c.startupStage === stage)
+      ),
+      url
     )
   }],
   ['GET', /^\/api\/funding-cycles$/, () => db.cycles.filter((c) => c.startupId === 's-1')],
   ['POST', /^\/api\/funding-cycles$/, ({ body }) => {
-    const cycle = { id: uid('fc'), startupId: 's-1', startupName: db.startups[0].name, startupSector: db.startups[0].sector, startupStage: db.startups[0].stage, openedAt: now(), closedAt: null, committedAmount: 0, commitmentCount: 0, minTicketSize: null, maxTicketSize: null, pitchDeckUrl: null, dataRoomUrl: null, ...body }
+    const problem = cycleProblem(body, null)
+    if (problem) return problem
+    const cycle = { id: uid('fc'), startupId: 's-1', startupName: db.startups[0].name, startupSector: db.startups[0].sector, startupStage: db.startups[0].stage, openedAt: now(), closedAt: null, committedAmount: 0, softCommittedAmount: 0, indicatedAmount: 0, commitmentCount: 0, minTicketSize: null, maxTicketSize: null, pitchDeckUrl: null, dataRoomUrl: null, ...body }
     db.cycles.unshift(cycle as never)
     return cycle
   }],
+  // The founder sees every investor; a VC sees only its own firm. The mock returned everyone's to
+  // both, which would have hidden a rival-visibility bug rather than surfacing it.
   ['GET', /^\/api\/funding-cycles\/([^/]+)\/commitments$/, ({ params }) =>
-    db.commitments.filter((c) => c.fundingCycleId === params[0])],
+    db.commitments.filter(
+      (c) => c.fundingCycleId === params[0] && (userType === 'startup' || c.vcFirmId === 'f-1')
+    )],
+  ['GET', /^\/api\/funding-cycles\/([^/]+)\/history$/, ({ params }) => {
+    const onRound = new Set(
+      db.commitments.filter((c) => c.fundingCycleId === params[0]).map((c) => c.id)
+    )
+    return db.commitmentEvents
+      .filter((e) => onRound.has(e.commitmentId) && (userType === 'startup' || e.vcFirmId === 'f-1'))
+      .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt))
+  }],
+  // After /open and the sub-paths above, so it can't swallow them.
+  ['GET', /^\/api\/funding-cycles\/([^/]+)$/, ({ params }) =>
+    db.cycles.find((c) => c.id === params[0])],
   ['POST', /^\/api\/funding-cycles\/([^/]+)\/commitments$/, ({ params, body }) => {
-    const commitment = { id: uid('c'), fundingCycleId: params[0], vcFirmId: 'f-1', vcFirmName: db.firm.name, committedAt: now(), ...body }
-    db.commitments.push(commitment as never)
     const cycle = db.cycles.find((c) => c.id === params[0])
-    if (cycle) {
-      cycle.committedAmount += body.amount
-      cycle.commitmentCount += 1
+    if (!cycle) return undefined
+    // The same four guards as FundingService.commit. The mock used to accept anything, so a
+    // ₹10 pledge against a ₹50 L–₹3 Cr band went through here and would have been refused by the
+    // real API — the fixture server hiding the contract instead of standing in for it.
+    if (cycle.status !== 'OPEN') return refuse("This round isn't open for commitments.")
+    if (body.currency !== cycle.currency) {
+      return refuse(`This round is raising in ${cycle.currency}.`)
     }
+    if (cycle.minTicketSize !== null && body.amount < cycle.minTicketSize) {
+      return refuse(`This round's minimum ticket is ${cycle.minTicketSize} ${cycle.currency}.`)
+    }
+    if (cycle.maxTicketSize !== null && body.amount > cycle.maxTicketSize) {
+      return refuse(`This round's maximum ticket is ${cycle.maxTicketSize} ${cycle.currency}.`)
+    }
+
+    const existingIndex = db.commitments.findIndex(
+      (c) => c.fundingCycleId === params[0] && c.vcFirmId === 'f-1'
+    )
+    // Spread the existing row first: rebuilding it from scratch dropped the fields the body
+    // doesn't carry — `convertedInvestmentId` among them — and a pledge with that key missing
+    // read as already recorded and vanished from the book's totals.
+    const existing = existingIndex >= 0 ? db.commitments[existingIndex] : null
+    const commitment = {
+      ...(existing ?? { convertedInvestmentId: null }),
+      id: existing ? existing.id : uid('c'),
+      fundingCycleId: params[0],
+      vcFirmId: 'f-1',
+      vcFirmName: db.firm.name,
+      committedAt: now(),
+      ...body,
+    }
+    const previous = existing ? { ...existing } : null
+    if (existingIndex >= 0) db.commitments[existingIndex] = commitment as never
+    else db.commitments.push(commitment as never)
+
+    recordEvent(commitment, previous)
+    recountCycle(params[0])
     return commitment
   }],
   ['PUT', /^\/api\/funding-cycles\/([^/]+)$/, ({ params, body }) => {
     const cycle = db.cycles.find((c) => c.id === params[0])
-    if (cycle) Object.assign(cycle, body)
+    if (!cycle) return undefined
+    const problem = cycleProblem(body, params[0])
+    if (problem) return problem
+    Object.assign(cycle, body)
+    // Closing a round is what makes its pledges convertible, and reopening one undoes that, so
+    // closedAt is the server's to set — as it is in FundingService.applyStatus.
+    if (body.status === 'CLOSED' && !cycle.closedAt) cycle.closedAt = now()
+    if (body.status !== 'CLOSED') cycle.closedAt = null
     return cycle
+  }],
+  // The firm's own book, across every round. Paged and filterable, like the real endpoint.
+  ['GET', /^\/api\/commitments$/, ({ url }) => {
+    const status = url.searchParams.get('status')
+    const mine = db.commitments
+      .filter((c) => c.vcFirmId === 'f-1' && (!status || c.status === status))
+      .map(withRoundContext)
+      .sort((a, b) => String(b.committedAt).localeCompare(String(a.committedAt)))
+    return paged(mine, url)
+  }],
+  // Totals over the whole book, like the real endpoint — the page's cards read these, so the
+  // arithmetic has to be the one the app ships (bookTotals, which the tests pin down).
+  ['GET', /^\/api\/commitments\/summary$/, () => {
+    const mine = db.commitments.filter((c) => c.vcFirmId === 'f-1').map(withRoundContext)
+    const totals = bookTotals(mine as never)
+    return {
+      committedByCurrency: totals.committed,
+      likelyByCurrency: totals.likely,
+      liveCount: totals.liveCount,
+      readyToRecordCount: totals.readyToRecordCount,
+    }
   }],
   ['PATCH', /^\/api\/commitments\/([^/]+)$/, ({ params, body }) => {
     const commitment = db.commitments.find((c) => c.id === params[0])
-    if (commitment) commitment.status = body.status
+    if (!commitment) return undefined
+    const previous = { ...commitment }
+    commitment.status = body.status
+    recordEvent(commitment, previous)
+    // Moving along the ladder moves the money between bands, so the round has to be recounted.
+    recountCycle(commitment.fundingCycleId)
     return commitment
+  }],
+  /**
+   * Record a closed round's pledge as an investment.
+   *
+   * The same three guards as the server, so the mock refuses what the API would refuse: the round
+   * has to be closed, the pledge has to be COMMITTED, and it can only happen once. Amount,
+   * currency and round come from the pledge — the body cannot restate them.
+   */
+  ['POST', /^\/api\/commitments\/([^/]+)\/convert$/, ({ params, body }) => {
+    const commitment = db.commitments.find((c) => c.id === params[0])
+    if (!commitment) return undefined
+    const cycle = db.cycles.find((c) => c.id === commitment.fundingCycleId)
+    if (cycle?.status !== 'CLOSED') {
+      return refuse('You can record this as an investment once the round has closed.')
+    }
+    if (commitment.status !== 'COMMITTED') {
+      return refuse("Only a committed pledge becomes an investment. An indication isn't money yet.")
+    }
+    if (commitment.convertedInvestmentId) {
+      return refuse('This pledge is already in your portfolio.')
+    }
+    // @PastOrPresent on the server. Without it here, May 2031 saved.
+    if (body?.investmentDate && String(body.investmentDate) > now().slice(0, 10)) {
+      return refuse("The investment date can't be in the future.", 400)
+    }
+
+    const startup = db.startups.find((entry) => entry.id === cycle.startupId)
+    const investment = {
+      id: uid('i'),
+      vcFirmId: 'f-1',
+      startupId: cycle.startupId,
+      startupName: cycle.startupName,
+      startupSector: cycle.startupSector,
+      startupLogoUrl: startup?.logoUrl ?? null,
+      investmentDate: (body?.investmentDate as string) ?? String(cycle.closedAt).slice(0, 10),
+      amount: commitment.amount,
+      currency: commitment.currency,
+      round: cycle.roundType,
+      equityPercentage: body?.equityPercentage ?? null,
+      status: 'ACTIVE',
+      notes: body?.notes ?? null,
+      createdAt: now(),
+      updatedAt: now(),
+    }
+    db.investments.unshift(investment as never)
+    commitment.convertedInvestmentId = investment.id
+    return withRoundContext(commitment)
   }],
 
   // ---- deal triage ----
@@ -494,6 +732,20 @@ export function installMocks() {
             timestamp: now(),
           }),
           { status: 500, headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // A handler that refused the write answers like the API does, not with success: true.
+      const refusal = (data as { __refusal?: { status: number; message: string } })?.__refusal
+      if (refusal) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            errorCode: 'BUSINESS_RULE_VIOLATION',
+            message: refusal.message,
+            timestamp: now(),
+          }),
+          { status: refusal.status, headers: { 'Content-Type': 'application/json' } }
         )
       }
 

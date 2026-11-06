@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { insightsApi, insightsKeys } from './api'
 import { useAuth } from '@/features/auth/useAuth'
 import { UserType } from '@/features/auth/types'
@@ -15,6 +16,9 @@ import {
   sparkValues,
 } from '@/features/investments/portfolioSeries'
 import { InvestmentRound } from '@/features/investments/types'
+import { fundingApi, fundingKeys } from '@/features/funding/api'
+import { FundingCycleStatus } from '@/features/funding/types'
+import { RoundMomentum, roundFillTable } from '@/features/funding/RoundMomentum'
 import { poolApi, poolKeys } from '@/features/pool/api'
 import { InterestLevel, interestLevelLabels } from '@/features/pool/types'
 import { InsightsFilterBar } from './InsightsFilterBar'
@@ -35,7 +39,7 @@ import { CompanyBreakdown } from '@/components/charts/CompanyBreakdown'
 import { withinRange } from '@/components/charts/RangeFilter'
 import { ChartIcon } from '@/components/icons'
 import { formatMoney, formatMoneyShort, pluralize } from '@/lib/constants'
-import { roundLabels } from '@/features/investments/types'
+import { roundLabel } from '@/features/investments/types'
 import { useEntrance } from '@/lib/useMotion'
 
 export const InsightsPage = () => {
@@ -60,6 +64,23 @@ export const InsightsPage = () => {
     queryKey: poolKeys.list(poolParams),
     queryFn: () => poolApi.list(poolParams),
     enabled: !isStartup,
+  })
+
+  // Founder only: the round to chart, and its history. The founder's rounds come back newest
+  // first, so an open round is preferred and a just-closed one is the fallback — the momentum of
+  // a round that has finished is still the most interesting thing on this page.
+  const myRounds = useQuery({
+    queryKey: fundingKeys.mine,
+    queryFn: fundingApi.listMine,
+    enabled: isStartup,
+  })
+  const chartedRound =
+    myRounds.data?.find((cycle) => cycle.status === FundingCycleStatus.OPEN) ?? myRounds.data?.[0]
+
+  const roundHistory = useQuery({
+    queryKey: fundingKeys.history(chartedRound?.id ?? ''),
+    queryFn: () => fundingApi.listHistory(chartedRound!.id),
+    enabled: Boolean(chartedRound),
   })
 
   const metrics = useEntrance<HTMLDivElement>(query.data ? 'loaded' : 'loading')
@@ -143,6 +164,43 @@ export const InsightsPage = () => {
     }))
   }, [records, currency])
 
+  /**
+   * R-23a: the question a founder mid-raise actually has. Full width, because the shape over time
+   * is the point and it reads badly in a half column.
+   *
+   * Built here rather than inline in the body because it is rendered by the error and empty
+   * branches as well. Its data comes from the funding API, not the analytics one, so a page-level
+   * analytics failure has no bearing on whether this chart can be drawn — and hiding it behind
+   * that failure is what made the one working chart on the page invisible.
+   */
+  const momentumCard =
+    isStartup && chartedRound ? (
+      <ChartFrame
+        className="mt-4"
+        title={`How your ${roundLabel(chartedRound.roundType)} round filled`}
+        description="Signed money at the bottom, conversations stacked on top. Replayed from the round's own record, so the last point matches what the round reports today."
+        aside={
+          <Link
+            to={`/rounds/${chartedRound.id}`}
+            className="text-xs text-ink-muted hover:text-brand-ink hover:underline"
+          >
+            Round detail
+          </Link>
+        }
+        stale={roundHistory.isFetching && !roundHistory.isLoading}
+        table={{
+          columns: ['Date', 'Standing'],
+          rows: roundFillTable(roundHistory.data ?? [], chartedRound),
+        }}
+      >
+        {(roundHistory.data ?? []).length > 0 ? (
+          <RoundMomentum cycle={chartedRound} events={roundHistory.data ?? []} height={240} />
+        ) : (
+          <ChartEmpty message="This fills in as investors pledge, change their number or pull out." />
+        )}
+      </ChartFrame>
+    ) : null
+
   if (query.isLoading) {
     return (
       <>
@@ -165,6 +223,7 @@ export const InsightsPage = () => {
       <>
         <PageHeader title="Insights" />
         <ErrorState error={query.error} onRetry={() => query.refetch()} />
+        {momentumCard}
       </>
     )
   }
@@ -179,6 +238,7 @@ export const InsightsPage = () => {
           title="No analytics yet"
           description="Metrics appear once your profile starts getting views and connection requests."
         />
+        {momentumCard}
       </>
     )
   }
@@ -268,6 +328,8 @@ export const InsightsPage = () => {
           />
         </div>
       )}
+
+      {momentumCard}
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_1fr]">
         <ChartFrame
@@ -443,7 +505,7 @@ export const InsightsPage = () => {
             table={{
               columns: ['Round', `Capital (${currency})`],
               rows: rounds.map((round) => [
-                roundLabels[round.label as keyof typeof roundLabels] ?? round.label,
+                roundLabel(round.label),
                 money(round.value),
               ]),
             }}
@@ -452,7 +514,7 @@ export const InsightsPage = () => {
               <RankedBars
                 items={rounds.map((round) => ({
                   ...round,
-                  label: roundLabels[round.label as keyof typeof roundLabels] ?? round.label,
+                  label: roundLabel(round.label),
                 }))}
                 format={money}
                 limit={8}

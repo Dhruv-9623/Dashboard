@@ -4,6 +4,7 @@ import {
   BuildingIcon,
   CalendarIcon,
   ChartIcon,
+  BankIcon,
   CoinsIcon,
   GridIcon,
   HeartIcon,
@@ -50,6 +51,9 @@ const vcNav: NavGroup[] = [
     label: 'Portfolio',
     items: [
       { to: '/investments', label: 'Investments', Icon: RocketIcon },
+      // Beside Investments on purpose: deployed capital and promised capital are the two
+      // halves of the firm's exposure, and a partner reviewing one wants the other.
+      { to: '/commitments', label: 'Commitments', Icon: BankIcon },
       { to: '/conflict-sentinel', label: 'Conflict Sentinel', Icon: ShieldIcon },
       { to: '/pulse', label: 'Portfolio Pulse', Icon: PulseIcon },
     ],

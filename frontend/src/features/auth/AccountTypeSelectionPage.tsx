@@ -14,6 +14,8 @@ export const AccountTypeSelectionPage = () => {
   useDocumentTitle('Choose account type')
 
   const mutation = useMutation({
+    // Reported in place, so it opts out of the global error toast.
+    meta: { errorToast: false },
     mutationFn: (userType: UserType) => authApi.completeAccountTypeSelection(userType),
     onSuccess: (user) => {
       // useAuth caches /me forever; without this the guards still see userType=null and

@@ -36,6 +36,8 @@ const ComposeModal = ({
   const queryClient = useQueryClient()
 
   const mutation = useMutation({
+    // Reported in place, so it opts out of the global error toast.
+    meta: { errorToast: false },
     mutationFn: () =>
       outreachApi.send({
         toStartupId: startup?.id ?? '',

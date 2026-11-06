@@ -105,6 +105,8 @@ public class InvestmentService {
                 .totalsByCurrency(totals)
                 .totalCount(counts.values().stream().mapToLong(Long::longValue).sum())
                 .activeCount(counts.getOrDefault(InvestmentStatus.ACTIVE, 0L))
+                .activeCompanyCount(investmentRepository
+                        .countDistinctCompaniesByStatus(firmId, InvestmentStatus.ACTIVE))
                 .exitedCount(counts.getOrDefault(InvestmentStatus.EXITED, 0L))
                 .writtenOffCount(counts.getOrDefault(InvestmentStatus.WRITTEN_OFF, 0L))
                 .build();

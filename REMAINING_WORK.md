@@ -1,6 +1,6 @@
 # Remaining Work
 
-_Last updated: 26 Sep 2026. Passes so far: the frontend, backend and design reviews; fixes; backend groundwork + Startup/Investment/Pool build-out; testing + one-command local setup; the design-system rebuild, the charts + hero pass, the Insights rebuild, the company view, and the illustration set + Insights filters._
+_Last updated: 26 Sep 2026. Passes so far: the frontend, backend and design reviews; fixes; backend groundwork + Startup/Investment/Pool build-out; testing + one-command local setup; the design-system rebuild, the charts + hero pass, the Insights rebuild, the company view, the illustration set + Insights filters, and funding cycles + commitments._
 
 **How to run and test any of this: `TESTING.md`.** `scripts/dev-up.sh` brings the whole stack up with demo accounts; `scripts/test-all.sh` runs everything that doesn't need a running app.
 
@@ -436,6 +436,64 @@ Verification: 82 tests pass, build clean, 34 page loads with 0 console errors an
 
 ---
 
+## Done in the ninth pass (3 Oct 2026) — funding cycles and commitments
+
+Branch `funding-and-commitments`. `CLAUDE.md` build-out item 3, Rule 3. The frontend contract in
+`features/funding/` already specified every endpoint, so this was a backend build to a fixed spec
+plus the design work the three-band data made possible.
+
+### Backend
+`domain/funding/` — `FundingCycle`, `FundingCommitment`, `FundingCycleStatus`, `CommitmentStatus`,
+two repositories, `FundingService`, and `V9__funding_cycles_and_commitments.sql`. Round type reuses
+`InvestmentRound`: a seed round is the same thing whether a founder is raising it or a VC has
+already written the cheque.
+
+**The eight rules, each with a test:**
+1. Only FOUNDER / CO_FOUNDER open or edit a round, and only their own startup's.
+2. STAFF can read deal flow but not pledge — same editor set as investments.
+3. **A firm sees only its own commitment on someone else's round.** Rival commitments are
+   competitively sensitive; the founder sees all. The filter is in the service, so no caller can
+   opt out of it.
+4. Only the committing firm moves its own commitment along the ladder — a founder can't promote
+   an investor's indication into a commitment.
+5. One commitment per firm per round; a second is an update, not a second investor.
+6. A paused or closed round takes nothing.
+7. A commitment is in the round's currency and inside its ticket band. A round's currency can't
+   change once money is pledged against it.
+8. `closedAt` is the server's, set on the transition into CLOSED and cleared on reopen.
+
+Plus: one OPEN round per startup, enforced by a partial unique index *and* a service check that
+turns a 409 into a sentence; RESTRICT deletes throughout, so a record of what was agreed can't be
+erased by deleting a company.
+
+### The `committedAmount` split
+The DTO now returns `committedAmount`, `softCommittedAmount` and `indicatedAmount` separately, as
+flagged before building. One lumped figure would add a conversation to a signed cheque and tell a
+founder they have money they don't have — and they hire against it. `RoundProgress` stacks the
+three bands, darkest for signed, with each band labelled.
+
+### Frontend
+Deal flow is now **paged** (it spans the whole market); the founder's page leads with four metrics
+that separate *committed* from *likely to land*; both pages use the ladder; the deal-flow empty
+state got the meeting scene.
+
+**Two contract bugs the real API exposed, which the mock had been hiding:** the round picker was
+built from the *startup-stage* list and submitted the display label (`"Series A"`) as the value —
+the real endpoint rejects it; and round types rendered raw (`SERIES_A`) in three places. The mock
+server was also incrementing `committedAmount` on every commitment regardless of band, so it now
+recomputes all three from the commitments it holds.
+
+### Verification
+| Check | Result |
+|---|---|
+| `./mvnw test` | **120 pass, 0 skipped** (was 82; +38 this pass) |
+| `scripts/funding-smoke-test.sh` against the real API | **27 / 27** |
+| Browser: founder opens a round end to end | 4 / 4, HTTP 201 against the real backend |
+| Frontend tests, typecheck, build | 82 pass, clean |
+| Every page × {1440px, 375px} | 34 loads, 0 console errors, 0 overflow |
+
+---
+
 ## Remaining — do next (roughly in order)
 
 ### Blocking or security
@@ -461,7 +519,7 @@ Verification: 82 tests pass, build clean, 34 page loads with 0 console errors an
 - ~~**R-17 · Table formatting**~~ — done for Investments and Pool (tabular right-aligned amounts, fixed decimals, no wrapping, `⋯` menus, card layout under 640px). **Still to do: Deal Triage's queue table**, which is the last one on the old pattern.
 - **R-18 · Detail-page loading:** Deal Triage detail and the startup profile show a single grey block. `SkeletonDetail` now exists for exactly this — wire it into those two pages.
 - ~~**R-23 · The Insights page has no charts**~~ — done: funnel, heat grid, scatter, ranked bars, deployment curve, pace, and a range filter.
-- **R-23a · The founder's Insights page is still the thin version.** The derived charts are VC-only because founders have no portfolio; the equivalent for them is commitment history over the life of a round, which needs the funding API (see build-out item 3).
+- **R-23a · The founder's Insights page is still the thin version.** Now unblocked: the funding API exists, so commitment history over the life of a round can be charted the way the VC deployment curve is.
 - **R-24 · Sector and stage history need the API.** Today's charts derive from one page of investments. A `GET /api/investments/series` would let them cover the whole portfolio and drop the "page in hand" caveat.
 - **R-19 · Tabs panels:** `role="tabpanel"` + `aria-controls` in each consumer (the Tabs component itself is done).
 - **R-19a · Sorting is per-page, client-side.** The list endpoints page without a sort parameter, so the Investments table sorts only the 20 rows in hand. Add `sort` to the API and move it server-side.
@@ -483,7 +541,7 @@ Verification: 82 tests pass, build clean, 34 page loads with 0 console errors an
 
 1. ~~**Startup**~~ — done (migration V8, entity, members, service, `/api/startups` with `/me`, search and members).
 2. ~~**Investment + Pool controllers**~~ — done, including the `/api/investments/summary` projection.
-3. **Funding cycles + commitments** (Rule 3: founders only). **← start here next time.** The frontend's `features/funding/types.ts` is the contract; the startup dashboard and Deal Flow both already read these endpoints and are running on mocks.
+3. ~~**Funding cycles + commitments**~~ — done (ninth pass). **Mutual-consent messaging is next**: Rule 1, and the last big gap between what the UI promises and what the server can answer.
 4. **Mutual-consent messaging:** `ConnectionRequest`, `Conversation`, `Message` (Rule 1).
 5. **Wishlist, Events** (+ attendees; the frontend still needs an event detail page), **Outreach.**
 6. **Insights, Comparison** (aggregation, no entities).

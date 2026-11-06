@@ -136,6 +136,8 @@ const Thread = ({ conversation }: { conversation: ConversationDTO }) => {
   })
 
   const send = useMutation({
+    // Reported in place, so it opts out of the global error toast.
+    meta: { errorToast: false },
     mutationFn: (body: string) => messagingApi.sendMessage(conversation.id, body),
     onSuccess: () => {
       setDraft('')
@@ -200,11 +202,11 @@ const Thread = ({ conversation }: { conversation: ConversationDTO }) => {
                 <div
                   className={cn(
                     'max-w-[75%] rounded-lg px-3.5 py-2',
-                    mine ? 'bg-brand text-white' : 'bg-surface-hover text-ink'
+                    mine ? 'bg-brand text-ink-on-fill' : 'bg-surface-hover text-ink'
                   )}
                 >
                   <p className="whitespace-pre-wrap text-sm">{message.body}</p>
-                  <p className={cn('mt-1 text-xs', mine ? 'text-[color-mix(in_oklab,white_82%,var(--brand))]' : 'text-ink-secondary')}>
+                  <p className={cn('mt-1 text-xs', mine ? 'text-[color-mix(in_oklab,var(--ink-on-fill)_88%,var(--brand))]' : 'text-ink-secondary')}>
                     {formatDateTime(message.sentAt)}
                   </p>
                 </div>

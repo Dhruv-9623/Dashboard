@@ -33,6 +33,8 @@ export const SetupFirmPage = () => {
   })
 
   const mutation = useMutation({
+    // Reported in place, so it opts out of the global error toast.
+    meta: { errorToast: false },
     mutationFn: () =>
       vcFirmApi.createFirm({
         name: form.name.trim(),

@@ -2,7 +2,7 @@ import { Select } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'
 import { RangeFilter } from '@/components/charts/RangeFilter'
 import { FilterIcon, XIcon } from '@/components/icons'
-import { InvestmentStatus, investmentStatusLabels, roundLabels } from '@/features/investments/types'
+import { InvestmentStatus, investmentStatusLabels, roundLabel } from '@/features/investments/types'
 import type { InsightsFilters } from './useInsightsFilters'
 
 interface InsightsFilterBarProps {
@@ -72,7 +72,7 @@ export const InsightsFilterBar = ({
         placeholder="Any round"
         options={rounds.map((round) => ({
           value: round,
-          label: roundLabels[round as keyof typeof roundLabels] ?? round,
+          label: roundLabel(round),
         }))}
         onChange={(event) => setFilter('round', event.target.value || null)}
       />

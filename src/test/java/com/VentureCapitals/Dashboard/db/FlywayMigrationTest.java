@@ -44,7 +44,7 @@ class FlywayMigrationTest extends PostgresContainerTest {
         List<String> applied = jdbc.queryForList(
                 "select version from flyway_schema_history where success order by installed_rank", String.class);
 
-        assertThat(applied).containsExactly("1", "2", "3", "4", "5", "7", "8");
+        assertThat(applied).containsExactly("1", "2", "3", "4", "5", "7", "8", "9", "10");
     }
 
     @Test
@@ -99,6 +99,107 @@ class FlywayMigrationTest extends PostgresContainerTest {
         assertThat(indexNames("pool_entries")).contains("idx_pool_entries_firm_interest");
         assertThat(indexNames("pool_entry_tags")).contains("idx_pool_entry_tags_entry_id");
         assertThat(indexNames("vc_firm_sectors")).contains("idx_vc_firm_sectors_firm_id");
+    }
+
+    @Test
+    void a_startup_raises_one_round_at_a_time() {
+        // Partial unique index: closed and paused rounds are unlimited, so the history stays.
+        String definition = jdbc.queryForObject("""
+                select indexdef from pg_indexes
+                 where tablename = 'funding_cycles' and indexname = 'uq_funding_cycle_one_open_per_startup'
+                """, String.class);
+
+        assertThat(definition)
+                .contains("UNIQUE")
+                .contains("startup_id")
+                .contains("WHERE ((status)::text = 'OPEN'::text)");
+    }
+
+    @Test
+    void one_firm_pledges_once_per_round() {
+        assertThat(jdbc.queryForObject("""
+                select count(*) from pg_indexes
+                 where tablename = 'funding_commitments' and indexdef like '%UNIQUE%funding_cycle_id, vc_firm_id%'
+                """, Integer.class)).isEqualTo(1);
+    }
+
+    @Test
+    void a_round_and_its_commitments_outlive_the_companies_on_either_side() {
+        // RESTRICT, like investments: deleting a startup or a firm must not quietly erase the
+        // record of what was agreed.
+        assertThat(deleteRuleOf("fk_funding_cycle_startup")).isEqualTo("RESTRICT");
+        assertThat(deleteRuleOf("fk_commitment_cycle")).isEqualTo("RESTRICT");
+        assertThat(deleteRuleOf("fk_commitment_vc_firm")).isEqualTo("RESTRICT");
+    }
+
+    @Test
+    void the_database_refuses_a_ticket_band_that_cannot_contain_anything() {
+        assertThat(jdbc.queryForObject("""
+                select count(*) from information_schema.table_constraints
+                 where table_name = 'funding_cycles'
+                   and constraint_name in ('ck_funding_cycle_ticket_band', 'ck_funding_cycle_target_positive')
+                """, Integer.class)).isEqualTo(2);
+    }
+
+    @Test
+    void the_deal_flow_query_has_an_index_to_use() {
+        assertThat(indexNames("funding_cycles")).contains("idx_funding_cycles_status_opened");
+        assertThat(indexNames("funding_commitments")).contains("idx_commitments_cycle", "idx_commitments_firm");
+    }
+
+    // --- V10: round history and conversion ----------------------------------------------------
+
+    @Test
+    void a_rounds_history_outlives_nothing_it_describes() {
+        // RESTRICT on every side. An event log that can be deleted out from under itself is not a
+        // record of anything — and the founder's momentum chart is read straight off these rows.
+        assertThat(deleteRuleOf("fk_commitment_event_commitment")).isEqualTo("RESTRICT");
+        assertThat(deleteRuleOf("fk_commitment_event_cycle")).isEqualTo("RESTRICT");
+        assertThat(deleteRuleOf("fk_commitment_event_firm")).isEqualTo("RESTRICT");
+        assertThat(deleteRuleOf("fk_commitment_event_actor")).isEqualTo("RESTRICT");
+    }
+
+    @Test
+    void an_event_cannot_record_half_a_change() {
+        // from_status and from_amount are null together (a creation) or set together (a change).
+        // Either one on its own would leave a row that can't be read back.
+        String definition = jdbc.queryForObject("""
+                select pg_get_constraintdef(oid) from pg_constraint
+                 where conname = 'ck_commitment_event_from_pair'
+                """, String.class);
+
+        assertThat(definition).contains("from_status IS NULL").contains("from_amount IS NULL");
+    }
+
+    @Test
+    void the_momentum_chart_query_has_an_index_to_use() {
+        assertThat(indexNames("commitment_events"))
+                .contains("idx_commitment_events_cycle_time",
+                        "idx_commitment_events_commitment",
+                        "idx_commitment_events_firm");
+    }
+
+    @Test
+    void deleting_an_investment_releases_the_pledge_it_came_from() {
+        // SET NULL rather than RESTRICT: a firm that deletes a portfolio row should be able to
+        // record the cheque again, not be blocked by a pledge pointing at the row it just removed.
+        assertThat(deleteRuleOf("fk_commitment_converted_investment")).isEqualTo("SET NULL");
+    }
+
+    @Test
+    void one_investment_belongs_to_at_most_one_pledge() {
+        // Partial unique index: unconverted pledges all hold NULL and are exempt, so this
+        // constrains only the ones that have actually claimed a portfolio row.
+        String definition = jdbc.queryForObject("""
+                select indexdef from pg_indexes
+                 where tablename = 'funding_commitments'
+                   and indexname = 'uq_commitment_converted_investment'
+                """, String.class);
+
+        assertThat(definition)
+                .contains("UNIQUE")
+                .contains("converted_investment_id")
+                .contains("WHERE (converted_investment_id IS NOT NULL)");
     }
 
     private String deleteRuleOf(String constraintName) {

@@ -40,6 +40,8 @@ export const ConflictSentinelPage = () => {
   })
 
   const runCheck = useMutation({
+    // Reported in place, so it opts out of the global error toast.
+    meta: { errorToast: false },
     mutationFn: (opportunityId: string) => conflictApi.run(opportunityId),
     onSuccess: (data) =>
       queryClient.setQueryData(conflictKeys.forOpportunity(data.opportunityId), data),

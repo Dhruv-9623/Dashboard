@@ -23,7 +23,9 @@ const InsightsPage = named(() => import('@/features/insights/InsightsPage'), 'In
 const InvestmentsPage = named(() => import('@/features/investments/InvestmentsPage'), 'InvestmentsPage')
 const PoolPage = named(() => import('@/features/pool/PoolPage'), 'PoolPage')
 const DealFlowPage = named(() => import('@/features/funding/DealFlowPage'), 'DealFlowPage')
+const CommitmentsPage = named(() => import('@/features/funding/CommitmentsPage'), 'CommitmentsPage')
 const FundingPage = named(() => import('@/features/funding/FundingPage'), 'FundingPage')
+const RoundDetailPage = named(() => import('@/features/funding/RoundDetailPage'), 'RoundDetailPage')
 const DiscoverPage = named(() => import('@/features/discovery/DiscoverPage'), 'DiscoverPage')
 const ComparisonPage = named(() => import('@/features/comparison/ComparisonPage'), 'ComparisonPage')
 const OutreachPage = named(() => import('@/features/outreach/OutreachPage'), 'OutreachPage')
@@ -78,6 +80,7 @@ function App() {
                     <Route path="/investments" element={<InvestmentsPage />} />
                     <Route path="/pool" element={<PoolPage />} />
                     <Route path="/deal-flow" element={<DealFlowPage />} />
+                    <Route path="/commitments" element={<CommitmentsPage />} />
                     <Route path="/outreach" element={<OutreachPage />} />
                     <Route path="/deal-triage" element={<ReviewQueuePage />} />
                     <Route path="/deal-triage/new" element={<NewOpportunityPage />} />
@@ -90,6 +93,9 @@ function App() {
                     <Route path="/funding" element={<FundingPage />} />
 
                     {/* Shared */}
+                    {/* One round, reached from both sides: the founder's list and an
+                        investor's book. The server decides how much of it each one sees. */}
+                    <Route path="/rounds/:id" element={<RoundDetailPage />} />
                     <Route path="/discover" element={<DiscoverPage />} />
                     <Route path="/messages" element={<MessagesPage />} />
                     <Route path="/wishlist" element={<WishlistPage />} />

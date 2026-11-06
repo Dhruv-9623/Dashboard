@@ -124,7 +124,7 @@ export const ReviewQueuePage = () => {
                     <Link
                       to={`/deal-triage/${deal.id}`}
                       onClick={(event) => event.stopPropagation()}
-                      className="font-medium text-ink hover:text-brand-ink hover:underline focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                      className="link-target inline-block font-medium text-ink hover:text-brand-ink hover:underline focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                     >
                       {deal.companyName}
                     </Link>

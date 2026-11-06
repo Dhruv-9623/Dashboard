@@ -34,6 +34,7 @@ as each: only OWNER can manage the team, STAFF can't record investments. Overrid
 | `scripts/test-all.sh` | Docker | All four of the above |
 | `./mvnw verify` | Docker | The above plus a coverage report at `target/site/jacoco/index.html` |
 | `scripts/api-smoke-test.sh` | A running backend | 36 API checks: tenancy, role gates, validation, paging, summary totals |
+| `scripts/funding-smoke-test.sh` | A running backend | 27 API checks on rounds and commitments: who may open and pledge, commitment visibility between rival firms, ticket and currency guards |
 | `npm --prefix frontend run test:e2e` | A running stack | 23 browser checks through the real UI |
 | `npm --prefix frontend run dev:mock` | — | The UI on fixture data, no backend |
 | `node frontend/e2e/sweep.mjs` | A running app | Loads every page at 1440px and 375px; reports console errors, horizontal overflow and missing `h1`s |

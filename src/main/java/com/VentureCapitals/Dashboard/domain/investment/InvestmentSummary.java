@@ -18,7 +18,16 @@ import java.util.Map;
 public class InvestmentSummary {
     private Map<String, Long> totalsByCurrency;
     private long totalCount;
+    /** Active <em>positions</em> — one per cheque, so a follow-on counts twice. */
     private long activeCount;
+    /**
+     * Active <em>companies</em> — one per startup however many cheques went into it.
+     *
+     * <p>Reported alongside {@link #activeCount} rather than replacing it because they answer
+     * different questions: "how many companies do we hold" and "how many positions do we carry".
+     * The portfolio headline wants the first; it used to show the second.
+     */
+    private long activeCompanyCount;
     private long exitedCount;
     private long writtenOffCount;
 }

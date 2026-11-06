@@ -68,7 +68,7 @@ export const VCFirmDetailPage = () => {
                     href={safeUrl(firm.website)}
                     target="_blank"
                     rel="noreferrer noopener"
-                    className="mt-2 inline-block text-sm text-brand-ink hover:underline"
+                    className="link-target mt-2 inline-block text-sm text-brand-ink hover:underline"
                   >
                     {firm.website}
                   </a>

@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/Button'
 import { WarningIcon } from '@/components/icons'
+import { errorMessage } from '@/lib/errorMessage'
 
 interface ErrorStateProps {
   title?: string
@@ -7,15 +8,9 @@ interface ErrorStateProps {
   onRetry?: () => void
 }
 
-const NETWORK_MESSAGE = "Can't reach the server. Check your connection and try again."
-
-export const errorMessage = (error: unknown, fallback = 'Something went wrong.') => {
-  // Browsers report network failures as a bare "Failed to fetch" / "Load failed" TypeError.
-  if (error instanceof TypeError && /fetch|load failed|network/i.test(error.message)) {
-    return NETWORK_MESSAGE
-  }
-  return error instanceof Error && error.message ? error.message : fallback
-}
+// Re-exported so the many `import { ErrorState, errorMessage }` call sites keep working;
+// the policy itself lives in lib/errorMessage.ts because the query client needs it too.
+export { errorMessage }
 
 export const ErrorState = ({ title = 'Could not load this view', error, onRetry }: ErrorStateProps) => (
   <div
