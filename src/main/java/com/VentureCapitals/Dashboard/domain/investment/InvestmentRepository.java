@@ -29,6 +29,18 @@ public interface InvestmentRepository extends JpaRepository<Investment, UUID> {
             + "where i.vcFirm.id = :firmId group by i.currency order by i.currency")
     List<CurrencyTotal> sumAmountByCurrency(@Param("firmId") UUID firmId);
 
+    /**
+     * The same per-currency totals, narrowed to one status.
+     *
+     * <p>Money in a company the firm has exited is not money at work. Totalling every row made the
+     * portfolio headline claim capital was deployed across companies it no longer held — a figure
+     * that disagreed with the active-holdings count printed beside it.
+     */
+    @Query("select i.currency as currency, sum(i.amount) as total from Investment i "
+            + "where i.vcFirm.id = :firmId and i.status = :status group by i.currency order by i.currency")
+    List<CurrencyTotal> sumAmountByCurrencyAndStatus(@Param("firmId") UUID firmId,
+                                                     @Param("status") InvestmentStatus status);
+
     @Query("select i.status as status, count(i) as count from Investment i "
             + "where i.vcFirm.id = :firmId group by i.status")
     List<StatusCount> countByStatus(@Param("firmId") UUID firmId);

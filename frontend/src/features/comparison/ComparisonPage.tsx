@@ -64,8 +64,38 @@ export const ComparisonPage = () => {
     )
   }
 
-  if (query.isLoading) return <Skeleton className="h-96 w-full" />
-  if (query.isError) return <ErrorState error={query.error} onRetry={() => query.refetch()} />
+  /*
+   * Both states keep the page header, so there is a heading and a way out.
+   * The bare `ErrorState` left the user on an unlabelled page whose only exit was the sidebar.
+   */
+  if (query.isLoading) {
+    return (
+      <>
+        <PageHeader title="Compare startups" />
+        <Skeleton className="h-96 w-full" />
+      </>
+    )
+  }
+  if (query.isError) {
+    return (
+      <>
+        <PageHeader
+          title="Compare startups"
+          description={`${ids.length} companies selected.`}
+          actions={
+            <Link to="/discover" className={buttonClass({ variant: 'outline' })}>
+              Change selection
+            </Link>
+          }
+        />
+        <ErrorState
+          title="Couldn't load the comparison"
+          error={query.error}
+          onRetry={() => query.refetch()}
+        />
+      </>
+    )
+  }
 
   const results = query.data ?? []
 

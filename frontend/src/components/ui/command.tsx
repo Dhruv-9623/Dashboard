@@ -46,10 +46,6 @@ function CommandDialog({
 }) {
   return (
     <Dialog {...props}>
-      <DialogHeader className="sr-only">
-        <DialogTitle>{title}</DialogTitle>
-        <DialogDescription>{description}</DialogDescription>
-      </DialogHeader>
       <DialogContent
         className={cn(
           "top-1/3 translate-y-0 overflow-hidden rounded-xl! p-0",
@@ -57,7 +53,15 @@ function CommandDialog({
         )}
         showCloseButton={showCloseButton}
       >
-        {children}
+        {/* Inside the content, or Radix has nothing to point aria-labelledby at. */}
+        <DialogHeader className="sr-only">
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        {/* Every cmdk primitive reads its store from this root's context. Without it
+            `useCommandState` dereferences an undefined store — the crash that took the
+            whole app down the moment the palette opened. */}
+        <Command>{children}</Command>
       </DialogContent>
     </Dialog>
   )

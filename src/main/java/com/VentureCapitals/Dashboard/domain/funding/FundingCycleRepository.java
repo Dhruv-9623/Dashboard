@@ -8,8 +8,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 public interface FundingCycleRepository extends JpaRepository<FundingCycle, UUID> {
@@ -38,8 +40,30 @@ public interface FundingCycleRepository extends JpaRepository<FundingCycle, UUID
              where cycle.status = com.VentureCapitals.Dashboard.domain.funding.FundingCycleStatus.OPEN
                and (:sector is null or startup.sector = :sector)
                and (:stage is null or startup.stage = :stage)
+               and (:startupId is null or startup.id = :startupId)
             """)
     Page<FundingCycle> findOpen(@Param("sector") String sector,
                                 @Param("stage") StartupStage stage,
+                                @Param("startupId") UUID startupId,
                                 Pageable pageable);
+
+    /**
+     * Which of these startups are currently raising.
+     *
+     * <p>Answered for a whole page in one query. The alternative — asking per startup while
+     * mapping — is a query per row on every discovery page.
+     */
+    @Query("""
+            select cycle.startup.id from FundingCycle cycle
+             where cycle.status = com.VentureCapitals.Dashboard.domain.funding.FundingCycleStatus.OPEN
+               and cycle.startup.id in :startupIds
+            """)
+    Set<UUID> findRaisingAmong(@Param("startupIds") Collection<UUID> startupIds);
+
+    /** Every startup with a round open, for the "raising now" filter on discovery. */
+    @Query("""
+            select cycle.startup.id from FundingCycle cycle
+             where cycle.status = com.VentureCapitals.Dashboard.domain.funding.FundingCycleStatus.OPEN
+            """)
+    Set<UUID> findAllRaising();
 }

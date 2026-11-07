@@ -98,11 +98,16 @@ public class InvestmentService {
         investmentRepository.sumAmountByCurrency(firmId)
                 .forEach(row -> totals.put(row.getCurrency(), row.getTotal()));
 
+        Map<String, Long> activeTotals = new LinkedHashMap<>();
+        investmentRepository.sumAmountByCurrencyAndStatus(firmId, InvestmentStatus.ACTIVE)
+                .forEach(row -> activeTotals.put(row.getCurrency(), row.getTotal()));
+
         Map<InvestmentStatus, Long> counts = new LinkedHashMap<>();
         investmentRepository.countByStatus(firmId).forEach(row -> counts.put(row.getStatus(), row.getCount()));
 
         return InvestmentSummary.builder()
                 .totalsByCurrency(totals)
+                .activeTotalsByCurrency(activeTotals)
                 .totalCount(counts.values().stream().mapToLong(Long::longValue).sum())
                 .activeCount(counts.getOrDefault(InvestmentStatus.ACTIVE, 0L))
                 .activeCompanyCount(investmentRepository

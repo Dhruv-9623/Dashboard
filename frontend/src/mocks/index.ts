@@ -142,6 +142,21 @@ const now = () => new Date().toISOString()
 type Ctx = { url: URL; body: any; params: string[] }
 type Handler = (ctx: Ctx) => unknown
 
+/**
+ * Whether a startup has a round open — derived, exactly as the server derives it.
+ *
+ * The fixtures carried a hand-set `isRaising` flag, which drifted from the rounds in `db.cycles`
+ * and let a "Raising" badge disagree with the funding data on the next screen.
+ */
+const raising = (startupId: string) =>
+  db.cycles.some((c) => c.startupId === startupId && c.status === 'OPEN')
+
+/** A startup as the API sends it, with `isRaising` computed rather than stored. */
+const asStartup = <T extends { id: string }>(startup: T) => ({
+  ...startup,
+  isRaising: raising(startup.id),
+})
+
 const routes: Array<[string, RegExp, Handler]> = [
   // ---- auth ----
   ['GET', /^\/api\/auth\/me$/, () => (userType === 'startup' ? db.startupUser : db.user)],
@@ -158,6 +173,23 @@ const routes: Array<[string, RegExp, Handler]> = [
     const member = { id: uid('m'), userId: uid('u'), userEmail: body.email, firmId: db.firm.id, role: body.role ?? 'STAFF', joinedAt: now(), createdAt: now(), updatedAt: now() }
     db.members.push(member as never)
     return member
+  }],
+  // The role endpoint reads the new role from the query string, not the body.
+  ['PUT', /^\/api\/vc\/firms\/([^/]+)\/members\/([^/]+)\/role$/, ({ params, url }) => {
+    const member = db.members.find((m) => m.id === params[1])
+    if (!member) return refuse('No such member.', 404)
+    const newRole = url.searchParams.get('newRole')
+    if (member.role === 'OWNER') return refuse('A firm keeps exactly one owner.')
+    member.role = newRole as never
+    member.updatedAt = now()
+    return member
+  }],
+  ['DELETE', /^\/api\/vc\/firms\/([^/]+)\/members\/([^/]+)$/, ({ params }) => {
+    const index = db.members.findIndex((m) => m.id === params[1])
+    if (index < 0) return refuse('No such member.', 404)
+    if (db.members[index].role === 'OWNER') return refuse("The firm's owner can't be removed.")
+    db.members.splice(index, 1)
+    return null
   }],
   ['PUT', /^\/api\/vc\/firms\/([^/]+)\/thesis$/, ({ body }) => {
     db.firm.thesis = { ...body, notes: body.notes ?? null, updatedAt: now() }
@@ -179,30 +211,36 @@ const routes: Array<[string, RegExp, Handler]> = [
   }],
 
   // ---- startups ----
-  ['GET', /^\/api\/startups\/me$/, () => (userType === 'startup' ? db.startups[0] : null)],
+  ['GET', /^\/api\/startups\/me$/, () => (userType === 'startup' ? asStartup(db.startups[0]) : null)],
   ['GET', /^\/api\/startups$/, ({ url }) => {
     const search = (url.searchParams.get('search') ?? '').toLowerCase()
     const sector = url.searchParams.get('sector')
     const stage = url.searchParams.get('stage')
-    const raising = url.searchParams.get('raisingOnly') === 'true'
+    const raisingOnly = url.searchParams.get('raisingOnly') === 'true'
     const matches = db.startups.filter(
       (s) =>
         s.name.toLowerCase().includes(search) &&
         (!sector || s.sector === sector) &&
         (!stage || s.stage === stage) &&
-        (!raising || s.isRaising)
+        (!raisingOnly || raising(s.id))
     )
-    return paged(matches, url)
+    return paged(matches.map(asStartup), url)
   }],
-  ['GET', /^\/api\/startups\/([^/]+)\/members$/, () => [
-    { id: 'sm-1', userId: 'u-9', userEmail: 'priya@lumen.health', startupId: 's-1', role: 'FOUNDER', joinedAt: db.startups[0].createdAt },
-    { id: 'sm-2', userId: 'u-10', userEmail: 'kabir@lumen.health', startupId: 's-1', role: 'CO_FOUNDER', joinedAt: db.startups[0].createdAt },
-  ]],
-  ['POST', /^\/api\/startups\/([^/]+)\/members$/, ({ body }) => ({
-    id: uid('sm'), userId: uid('u'), userEmail: body.email, startupId: 's-1', role: body.role, joinedAt: now(),
-  })],
+  ['GET', /^\/api\/startups\/([^/]+)\/members$/, () => db.startupMembers],
+  ['POST', /^\/api\/startups\/([^/]+)\/members$/, ({ body }) => {
+    const member = { id: uid('sm'), userId: uid('u'), userEmail: body.email, startupId: 's-1', role: body.role, joinedAt: now(), createdAt: now(), updatedAt: now() }
+    db.startupMembers.push(member as never)
+    return member
+  }],
+  ['DELETE', /^\/api\/startups\/([^/]+)\/members\/([^/]+)$/, ({ params }) => {
+    const index = db.startupMembers.findIndex((m) => m.id === params[1])
+    if (index < 0) return refuse('No such member.', 404)
+    if (db.startupMembers[index].role === 'FOUNDER') return refuse("The founder can't be removed.")
+    db.startupMembers.splice(index, 1)
+    return null
+  }],
   ['GET', /^\/api\/startups\/([^/]+)$/, ({ params }) =>
-    db.startups.find((s) => s.id === params[0]) ?? db.startups[0]],
+    asStartup(db.startups.find((s) => s.id === params[0]) ?? db.startups[0])],
   ['PUT', /^\/api\/startups\/([^/]+)$/, ({ body }) => {
     Object.assign(db.startups[0], body, { updatedAt: now() })
     return db.startups[0]
@@ -219,8 +257,13 @@ const routes: Array<[string, RegExp, Handler]> = [
   }],
   ['GET', /^\/api\/investments\/summary$/, () => {
     const totalsByCurrency: Record<string, number> = {}
+    const activeTotalsByCurrency: Record<string, number> = {}
     for (const item of db.investments) {
       totalsByCurrency[item.currency] = (totalsByCurrency[item.currency] ?? 0) + item.amount
+      if (item.status === 'ACTIVE') {
+        activeTotalsByCurrency[item.currency] =
+          (activeTotalsByCurrency[item.currency] ?? 0) + item.amount
+      }
     }
     const count = (status: string) => db.investments.filter((i) => i.status === status).length
     // Distinct companies, like the real query: a follow-on is another position in a company
@@ -230,6 +273,7 @@ const routes: Array<[string, RegExp, Handler]> = [
     ).size
     return {
       totalsByCurrency,
+      activeTotalsByCurrency,
       totalCount: db.investments.length,
       activeCount: count('ACTIVE'),
       activeCompanyCount: activeCompanies,
@@ -280,12 +324,14 @@ const routes: Array<[string, RegExp, Handler]> = [
   ['GET', /^\/api\/funding-cycles\/open$/, ({ url }) => {
     const sector = url.searchParams.get('sector')
     const stage = url.searchParams.get('stage')
+    const startupId = url.searchParams.get('startupId')
     return paged(
       db.cycles.filter(
         (c) =>
           c.status === 'OPEN' &&
           (!sector || c.startupSector === sector) &&
-          (!stage || c.startupStage === stage)
+          (!stage || c.startupStage === stage) &&
+          (!startupId || c.startupId === startupId)
       ),
       url
     )

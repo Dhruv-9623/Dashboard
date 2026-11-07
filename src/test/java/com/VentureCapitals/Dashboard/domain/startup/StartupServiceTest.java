@@ -35,6 +35,8 @@ class StartupServiceTest extends BaseUnitTest {
     private UserRepository userRepository;
     @Mock
     private VCMemberRepository vcMemberRepository;
+    @Mock
+    private com.VentureCapitals.Dashboard.domain.funding.FundingCycleRepository fundingCycleRepository;
     @InjectMocks
     private StartupService startupService;
 
@@ -140,7 +142,25 @@ class StartupServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void raising_only_filter_returns_nothing_until_funding_cycles_exist() {
+    void raising_only_filter_narrows_to_startups_with_a_round_open() {
+        UUID raisingId = UUID.randomUUID();
+        when(fundingCycleRepository.findAllRaising()).thenReturn(java.util.Set.of(raisingId));
+        when(startupRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class),
+                any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+
+        startupService.searchStartups(null, null, null, true, PageRequest.of(0, 20));
+
+        // The filter now reaches the repository instead of short-circuiting to an empty page,
+        // which is what made "Raising now" blank the discovery list.
+        verify(startupRepository).findAll(any(org.springframework.data.jpa.domain.Specification.class),
+                any(org.springframework.data.domain.Pageable.class));
+    }
+
+    @Test
+    void raising_only_filter_skips_the_query_when_nobody_is_raising() {
+        when(fundingCycleRepository.findAllRaising()).thenReturn(java.util.Set.of());
+
         var page = startupService.searchStartups(null, null, null, true, PageRequest.of(0, 20));
 
         assertThat(page.getTotalElements()).isZero();

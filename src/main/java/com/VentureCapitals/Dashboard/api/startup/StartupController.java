@@ -3,6 +3,7 @@ package com.VentureCapitals.Dashboard.api.startup;
 import com.VentureCapitals.Dashboard.common.ApiResponse;
 import com.VentureCapitals.Dashboard.common.PageResponse;
 import com.VentureCapitals.Dashboard.domain.startup.AddStartupMemberRequest;
+import com.VentureCapitals.Dashboard.domain.startup.Startup;
 import com.VentureCapitals.Dashboard.domain.startup.StartupRequest;
 import com.VentureCapitals.Dashboard.domain.startup.StartupService;
 import com.VentureCapitals.Dashboard.domain.startup.StartupStage;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @RestController
@@ -48,7 +50,11 @@ public class StartupController {
             @RequestParam(defaultValue = "" + PageResponse.DEFAULT_SIZE) int size) {
         var results = startupService.searchStartups(search, sector, stage, raisingOnly,
                 PageResponse.pageable(page, size, Sort.by("name").ascending()));
-        return ResponseEntity.ok(ApiResponse.ok(PageResponse.from(results, startupMapper::toDTO)));
+        // One extra query for the whole page, rather than one per row inside the mapper.
+        Set<UUID> raising = startupService.raisingAmong(
+                results.getContent().stream().map(Startup::getId).toList());
+        return ResponseEntity.ok(ApiResponse.ok(PageResponse.from(results,
+                startup -> startupMapper.toDTO(startup, raising.contains(startup.getId())))));
     }
 
     /** The signed-in founder's startup, or null data before profile setup. */
@@ -56,14 +62,15 @@ public class StartupController {
     @PreAuthorize("hasRole('STARTUP')")
     public ResponseEntity<ApiResponse<StartupDTO>> getMyStartup(@CurrentUser User user) {
         StartupDTO dto = startupService.findStartupForUser(user.getId())
-                .map(startupMapper::toDTO)
+                .map(startup -> startupMapper.toDTO(startup, startupService.isRaising(startup.getId())))
                 .orElse(null);
         return ResponseEntity.ok(ApiResponse.ok(dto));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<StartupDTO>> getStartup(@PathVariable UUID id) {
-        return ResponseEntity.ok(ApiResponse.ok(startupMapper.toDTO(startupService.getStartup(id))));
+        return ResponseEntity.ok(ApiResponse.ok(
+                startupMapper.toDTO(startupService.getStartup(id), startupService.isRaising(id))));
     }
 
     @PostMapping

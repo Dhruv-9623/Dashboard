@@ -6,7 +6,22 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class StartupMapper {
+    /**
+     * For a startup whose funding status has not been looked up.
+     *
+     * <p>Used where the answer cannot matter — the response to creating or editing a profile,
+     * which no "Raising" badge is read from. Anywhere a reader might act on it, pass the flag.
+     */
     public StartupDTO toDTO(Startup startup) {
+        return toDTO(startup, false);
+    }
+
+    /**
+     * @param raising whether this startup has a funding round open. Supplied by the caller rather
+     *                than queried here: a mapper asking per row costs one query per list item,
+     *                and {@code StartupService.raisingAmong} answers for a whole page at once.
+     */
+    public StartupDTO toDTO(Startup startup, boolean raising) {
         return StartupDTO.builder()
                 .id(startup.getId())
                 .name(startup.getName())
@@ -20,8 +35,7 @@ public class StartupMapper {
                 .annualRevenue(startup.getAnnualRevenue())
                 .teamSize(startup.getTeamSize())
                 .pitchDeckUrl(startup.getPitchDeckUrl())
-                // Derived from open funding cycles once those exist; none can be open yet.
-                .isRaising(false)
+                .isRaising(raising)
                 .createdAt(startup.getCreatedAt())
                 .updatedAt(startup.getUpdatedAt())
                 .build();

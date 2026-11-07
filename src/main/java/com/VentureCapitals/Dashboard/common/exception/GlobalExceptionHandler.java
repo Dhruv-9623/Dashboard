@@ -85,10 +85,19 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.BAD_REQUEST, ErrorCode.INVALID_REQUEST, e.getMessage());
     }
 
-    /** Unmapped paths. Without this the catch-all below reported missing endpoints as 500s. */
+    /**
+     * Unmapped paths. Without this the catch-all below reported missing endpoints as 500s.
+     *
+     * <p>The path goes to the log, not to the response. An unmapped route is our own bug, and the
+     * old body put it on the user's screen verbatim — "No endpoint at
+     * /api/vc/firms/e85dec0d-.../thesis" appeared in a settings dialog, publishing an internal
+     * identifier along with it.
+     */
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleNoResource(NoResourceFoundException e) {
-        return error(HttpStatus.NOT_FOUND, ErrorCode.ENTITY_NOT_FOUND, "No endpoint at /" + e.getResourcePath());
+        log.warn("No endpoint at /{}", e.getResourcePath());
+        return error(HttpStatus.NOT_FOUND, ErrorCode.ENTITY_NOT_FOUND,
+                "That part of the app isn't available right now.");
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)

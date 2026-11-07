@@ -249,11 +249,22 @@ export const RoundDetailPage = () => {
               <StatTile
                 label="Ticket band"
                 value={
-                  cycle.minTicketSize || cycle.maxTicketSize
-                    ? `${cycle.minTicketSize ? formatMoney(cycle.minTicketSize, cycle.currency) : 'any'} – ${
-                        cycle.maxTicketSize ? formatMoney(cycle.maxTicketSize, cycle.currency) : 'any'
-                      }`
-                    : 'No limits'
+                  cycle.minTicketSize || cycle.maxTicketSize ? (
+                    /*
+                     * Two money figures will not fit on one line at the card's figure size in this
+                     * sidebar column, and "₹1.00 Cr – ₹10.00 Cr" broke across two lines mid-range.
+                     * Stepped down a size and held on one line instead of shortening the numbers:
+                     * `formatMoneyShort` rounds, and rounding a stated ticket minimum to ₹2 Cr
+                     * when it is ₹1.5 Cr misstates a rule investors have to meet.
+                     */
+                    <span className="block text-base leading-6 whitespace-nowrap">
+                      {cycle.minTicketSize ? formatMoney(cycle.minTicketSize, cycle.currency) : 'any'}
+                      {' – '}
+                      {cycle.maxTicketSize ? formatMoney(cycle.maxTicketSize, cycle.currency) : 'any'}
+                    </span>
+                  ) : (
+                    'No limits'
+                  )
                 }
               />
             </CardContent>

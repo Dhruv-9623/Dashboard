@@ -94,12 +94,19 @@ describe('cumulativeDeployed', () => {
 })
 
 describe('dealsPerQuarter', () => {
+  // The series runs to the quarter we are in, so every case pins "now" rather than
+  // depending on the day the suite happens to run.
+  const inQ3of2025 = new Date('2025-08-15T00:00:00Z')
+
   it('counts cheques per quarter and spans the empty ones', () => {
-    const series = dealsPerQuarter([
-      investment({ investmentDate: '2025-01-15' }),
-      investment({ investmentDate: '2025-02-20' }),
-      investment({ investmentDate: '2025-08-01' }),
-    ])
+    const series = dealsPerQuarter(
+      [
+        investment({ investmentDate: '2025-01-15' }),
+        investment({ investmentDate: '2025-02-20' }),
+        investment({ investmentDate: '2025-08-01' }),
+      ],
+      inQ3of2025,
+    )
 
     expect(series.map((point) => [point.label, point.value])).toEqual([
       ['Q1 25', 2],
@@ -109,11 +116,30 @@ describe('dealsPerQuarter', () => {
   })
 
   it('crosses a year boundary', () => {
-    const series = dealsPerQuarter([
-      investment({ investmentDate: '2024-11-01' }),
-      investment({ investmentDate: '2025-02-01' }),
-    ])
+    const series = dealsPerQuarter(
+      [
+        investment({ investmentDate: '2024-11-01' }),
+        investment({ investmentDate: '2025-02-01' }),
+      ],
+      new Date('2025-02-10T00:00:00Z'),
+    )
     expect(series.map((point) => point.label)).toEqual(['Q4 24', 'Q1 25'])
+  })
+
+  it('runs through the current quarter even when nothing has happened since', () => {
+    // The dashboard reads the last point as "this quarter". Stopping at the last cheque
+    // reported a deal in the current quarter for a firm whose last one closed in April.
+    const series = dealsPerQuarter(
+      [investment({ investmentDate: '2026-04-01' })],
+      new Date('2026-11-07T00:00:00Z'),
+    )
+
+    expect(series.map((point) => [point.label, point.value])).toEqual([
+      ['Q2 26', 1],
+      ['Q3 26', 0],
+      ['Q4 26', 0],
+    ])
+    expect(series[series.length - 1].value).toBe(0)
   })
 })
 

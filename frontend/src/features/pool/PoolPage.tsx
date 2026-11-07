@@ -60,7 +60,27 @@ const PoolEntryModal = ({
   entry: PoolEntryDTO | null
 }) => {
   const [startup, setStartup] = useState<StartupDTO | null>(null)
-  const [offPlatform, setOffPlatform] = useState(!entry?.startupId)
+  /**
+   * New entries start on "On platform".
+   *
+   * `!entry?.startupId` is true for a brand-new entry too, so "Track company" opened defaulted to
+   * an off-platform company — the rarer case, and the one that leaves the row unlinked to any
+   * startup record.
+   */
+  const [offPlatform, setOffPlatform] = useState(entry ? !entry.startupId : false)
+
+  /**
+   * The company an existing on-platform entry already points at.
+   *
+   * Editing one rendered the startup picker with nothing chosen, because the picker's state was
+   * never seeded from the entry — so the field looked empty and Save stayed disabled, making the
+   * entry impossible to edit at all. The company itself isn't editable here: swapping which
+   * startup a pool row refers to is a delete and a re-add, not a field change.
+   */
+  const lockedCompany =
+    entry?.startupId != null
+      ? { id: entry.startupId, name: entry.companyName, sector: entry.sector, stage: entry.stage }
+      : null
   const [form, setForm] = useState({
     companyName: entry?.companyName ?? '',
     sector: entry?.sector ?? '',
@@ -78,10 +98,12 @@ const PoolEntryModal = ({
     meta: { errorToast: false },
     mutationFn: () => {
       const payload: UpsertPoolEntryRequest = {
-        startupId: offPlatform ? undefined : startup?.id,
-        companyName: offPlatform ? form.companyName.trim() : (startup?.name ?? ''),
-        sector: (offPlatform ? form.sector : startup?.sector) || undefined,
-        stage: (offPlatform ? form.stage : startup?.stage) || undefined,
+        startupId: offPlatform ? undefined : (startup?.id ?? lockedCompany?.id),
+        companyName: offPlatform
+          ? form.companyName.trim()
+          : (startup?.name ?? lockedCompany?.name ?? ''),
+        sector: (offPlatform ? form.sector : (startup?.sector ?? lockedCompany?.sector)) || undefined,
+        stage: (offPlatform ? form.stage : (startup?.stage ?? lockedCompany?.stage)) || undefined,
         tags: form.tags
           .split(',')
           .map((tag) => tag.trim())
@@ -100,7 +122,9 @@ const PoolEntryModal = ({
 
   const fields = useFieldErrors(mutation.error)
 
-  const ready = offPlatform ? Boolean(form.companyName.trim()) : Boolean(startup)
+  const ready = offPlatform
+    ? Boolean(form.companyName.trim())
+    : Boolean(startup ?? lockedCompany)
 
   return (
     <Modal
@@ -194,6 +218,26 @@ const PoolEntryModal = ({
               </div>
             </div>
           </>
+        ) : lockedCompany ? (
+          <div>
+            <Label>Company</Label>
+            <div className="flex items-center gap-3 rounded-lg border border-line bg-surface-sunken px-3 py-2.5">
+              <EntityAvatar name={lockedCompany.name} size="sm" />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-ink">{lockedCompany.name}</p>
+                {(lockedCompany.sector || lockedCompany.stage) && (
+                  <p className="truncate text-xs text-ink-muted">
+                    {[lockedCompany.sector, lockedCompany.stage && stageLabel(lockedCompany.stage)]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
+                )}
+              </div>
+            </div>
+            <FieldHint>
+              To track a different company, remove this entry and add the other one.
+            </FieldHint>
+          </div>
         ) : (
           <div>
             <Label required>Startup</Label>

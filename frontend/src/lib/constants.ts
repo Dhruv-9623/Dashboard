@@ -24,12 +24,35 @@ export const STAGES = [
   { value: 'GROWTH', label: 'Growth' },
 ] as const
 
+/**
+ * Assets under management is typed in crore but stored in rupees, like every other amount in the
+ * system.
+ *
+ * The form said "AUM (₹ crore)" and wrote the number straight through, so a firm holding ₹450
+ * crore displayed as 4500000000 in a field labelled crore. Two other places disagreed again — the
+ * firm profile multiplied the same value by a million. One unit in the data, converted only at the
+ * input that asks for crore.
+ */
+export const CRORE = 10_000_000
+
+/** Rupees to crore, for display. Trailing zeros are dropped: 4_500_000_000 -> "450". */
+export const toCroreInput = (rupees: number | null | undefined) =>
+  rupees == null ? '' : String(Number((rupees / CRORE).toFixed(4)))
+
+/** Crore back to whole rupees, for saving. */
+export const fromCroreInput = (crore: string) =>
+  crore.trim() === '' ? undefined : Math.round(Number(crore) * CRORE)
+
 export const CURRENCIES = [
   { value: 'INR', label: '₹ INR' },
   { value: 'USD', label: '$ USD' },
 ] as const
 
 export const sectorOptions = SECTORS.map((sector) => ({ value: sector, label: sector }))
+
+/** The inverse of {@link stageLabel}: the firm profile stores a stage by its label. */
+export const stageValue = (label: string) =>
+  STAGES.find((entry) => entry.label === label)?.value ?? label
 
 export const stageLabel = (stage: string) =>
   STAGES.find((entry) => entry.value === stage)?.label ?? stage

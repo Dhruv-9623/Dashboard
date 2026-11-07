@@ -16,6 +16,13 @@ export interface ThesisFormValues extends UpdateThesisRequest {
 interface ThesisFormProps {
   thesis: ThesisDTO | null
   firmName: string
+  /**
+   * What to start from when no thesis has been saved yet.
+   *
+   * A firm that has already declared its sectors and stage on its profile should not be made to
+   * pick them again from an empty form — the thesis tab looked as though it had lost them.
+   */
+  defaults?: { sectors?: string[]; stages?: string[] }
   showFirmName?: boolean
   submitLabel: string
   pending?: boolean
@@ -26,6 +33,7 @@ interface ThesisFormProps {
 export const ThesisForm = ({
   thesis,
   firmName,
+  defaults,
   showFirmName = false,
   submitLabel,
   pending,
@@ -33,8 +41,8 @@ export const ThesisForm = ({
   footer,
 }: ThesisFormProps) => {
   const [name, setName] = useState(firmName)
-  const [sectors, setSectors] = useState<string[]>(thesis?.sectors ?? [])
-  const [stages, setStages] = useState<string[]>(thesis?.stages ?? [])
+  const [sectors, setSectors] = useState<string[]>(thesis?.sectors ?? defaults?.sectors ?? [])
+  const [stages, setStages] = useState<string[]>(thesis?.stages ?? defaults?.stages ?? [])
   const [currency, setCurrency] = useState(thesis?.currency ?? 'INR')
   const [min, setMin] = useState(thesis?.chequeSizeMin?.toString() ?? '')
   const [max, setMax] = useState(thesis?.chequeSizeMax?.toString() ?? '')
