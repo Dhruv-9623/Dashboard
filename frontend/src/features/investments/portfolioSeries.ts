@@ -103,8 +103,15 @@ export function cumulativeDeployed(investments: InvestmentDTO[], currency: strin
  * Quarters rather than months: a fund's own cadence is quarterly, and monthly
  * buckets over a multi-year history are mostly zeros with single-deal spikes,
  * which renders as slivers rather than a shape.
+ *
+ * The series always runs through the quarter we are in now, even when that quarter is empty.
+ * Stopping at the last cheque made a dormant stretch invisible, and made the final point read as
+ * "this quarter" when it was really "the last quarter anything happened" — a firm whose last deal
+ * closed in April was shown as having done one deal in the current quarter.
+ *
+ * `now` is injectable so the behaviour can be tested without freezing the clock.
  */
-export function dealsPerQuarter(investments: InvestmentDTO[]): TimePoint[] {
+export function dealsPerQuarter(investments: InvestmentDTO[], now: Date = new Date()): TimePoint[] {
   if (investments.length === 0) return []
 
   const quarterOf = (iso: string) => {
@@ -121,7 +128,14 @@ export function dealsPerQuarter(investments: InvestmentDTO[]): TimePoint[] {
   }
 
   const first = quarterOf(sorted[0].investmentDate)
-  const last = quarterOf(sorted[sorted.length - 1].investmentDate)
+  const lastDeal = quarterOf(sorted[sorted.length - 1].investmentDate)
+  const current = { year: now.getFullYear(), quarter: Math.floor(now.getMonth() / 3) + 1 }
+  // Whichever is later. A future-dated cheque still extends the series past today.
+  const last =
+    current.year > lastDeal.year
+      || (current.year === lastDeal.year && current.quarter > lastDeal.quarter)
+      ? current
+      : lastDeal
 
   const points: TimePoint[] = []
   let { year, quarter } = first

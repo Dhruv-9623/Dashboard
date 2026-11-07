@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 import { useFocusTrap } from '@/lib/useFocusTrap'
 import { motion, overlayIn, duration, ease } from '@/lib/motion'
@@ -53,7 +54,16 @@ export const Modal = ({
 
   if (!open) return null
 
-  return (
+  /**
+   * Rendered into `document.body` rather than in place.
+   *
+   * A modal left where it is declared sits inside the page container, and that container carries a
+   * transform from the page-entry animation — even `matrix(1, 0, 0, 1, 0, 0)`. A transform makes an
+   * element the containing block for `position: fixed` descendants *and* opens a stacking context,
+   * so `inset-0` stopped meaning the viewport and `z-50` stopped outranking the z-30 header. The
+   * result was a dialog whose title and close button were painted over by the top bar.
+   */
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
       <div
         ref={scrimRef}
@@ -112,6 +122,7 @@ export const Modal = ({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

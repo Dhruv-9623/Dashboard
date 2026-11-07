@@ -63,10 +63,13 @@ public class FundingController {
     public ResponseEntity<ApiResponse<PageResponse<FundingCycleDTO>>> listOpen(
             @RequestParam(required = false) String sector,
             @RequestParam(required = false) StartupStage stage,
+            // Lets a startup's profile show its own open round without paging all of deal flow.
+            @RequestParam(required = false) UUID startupId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
         Page<FundingCycle> cycles = fundingService.listOpen(
+                sector, stage, startupId, PageResponse.pageable(page, size, Sort.by(Sort.Direction.DESC, "openedAt")));
                 sector, stage, PageResponse.pageable(page, size, Sort.by(Sort.Direction.DESC, "openedAt")));
         Map<UUID, CycleTotals> totals = fundingService.totalsFor(cycles.getContent());
 

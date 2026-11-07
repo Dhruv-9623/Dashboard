@@ -1,8 +1,10 @@
+import type { ReactNode } from 'react'
 import { MetricCard } from '@/components/MetricCard'
 
 interface StatTileProps {
   label: string
-  value: string | number
+  /** Widened to match MetricCard: a few tiles need their own type treatment for the figure. */
+  value: ReactNode
   hint?: string
   tone?: 'default' | 'amber' | 'red'
 }

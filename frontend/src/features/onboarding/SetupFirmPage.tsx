@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import { errorMessage } from '@/components/ErrorState'
 import { useFieldErrors } from '@/lib/useFieldErrors'
-import { STAGES, sectorOptions } from '@/lib/constants'
+import { STAGES, sectorOptions, fromCroreInput } from '@/lib/constants'
 import { OnboardingLayout } from './OnboardingLayout'
 
 const stageOptions = STAGES.map((stage) => ({ value: stage.label, label: stage.label }))
@@ -40,7 +40,7 @@ export const SetupFirmPage = () => {
         name: form.name.trim(),
         description: form.description || undefined,
         website: form.website || undefined,
-        aum: form.aum ? Number(form.aum) : undefined,
+        aum: fromCroreInput(form.aum),
         investmentStage: form.investmentStage || undefined,
         sectors: sectors.length > 0 ? sectors : undefined,
         location: form.location || undefined,

@@ -18,7 +18,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
-  ChevronUpDownIcon,
   LogOutIcon,
   MoonIcon,
   SearchIcon,
@@ -127,7 +126,13 @@ export const AppShell = () => {
             {isStartup ? 'Startup workspace' : 'Investor workspace'}
           </p>
         </div>
-        {menuOpen ? (
+        {/*
+          No switcher chevron. It read as "pick another workspace" and did nothing when clicked,
+          because a user belongs to exactly one firm or startup — there is no second workspace to
+          switch to. Account actions already live in the avatar menu in the top bar. Bring the
+          chevron back when membership of more than one organisation exists.
+        */}
+        {menuOpen && (
           <Button
             variant="ghost"
             size="icon-sm"
@@ -137,8 +142,6 @@ export const AppShell = () => {
           >
             <XIcon className="size-4" aria-hidden="true" />
           </Button>
-        ) : (
-          <ChevronUpDownIcon className="size-4 shrink-0 text-ink-muted" aria-hidden="true" />
         )}
       </div>
 

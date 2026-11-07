@@ -22,11 +22,13 @@ import { Tabs } from '@/components/ui/Tabs'
 import { Alert } from '@/components/ui/Alert'
 import { Loading } from '@/components/Loading'
 import { SkeletonRows } from '@/components/ui/Skeleton'
+import { RowActions } from '@/components/ui/RowActions'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table'
 import { CheckIcon } from '@/components/icons'
-import { errorMessage } from '@/components/ErrorState'
+import { actionError, errorMessage } from '@/lib/errorMessage'
 import { cn } from '@/lib/utils'
-import { STAGES, sectorOptions, formatDate } from '@/lib/constants'
+import { STAGES, sectorOptions, formatDate, toCroreInput, fromCroreInput, stageValue } from '@/lib/constants'
 
 const stageOptions = STAGES.map((stage) => ({ value: stage.label, label: stage.label }))
 const startupStageOptions = STAGES.map((stage) => ({ value: stage.value, label: stage.label }))
@@ -41,7 +43,7 @@ const FirmProfileTab = () => {
     website: firm?.website ?? '',
     investmentStage: firm?.investmentStage ?? '',
     location: firm?.location ?? '',
-    aum: firm?.aum?.toString() ?? '',
+    aum: toCroreInput(firm?.aum),
   })
 
   const mutation = useMutation({
@@ -55,7 +57,7 @@ const FirmProfileTab = () => {
         investmentStage: form.investmentStage || undefined,
         sectors: sectors.length > 0 ? sectors : undefined,
         location: form.location || undefined,
-        aum: form.aum ? Number(form.aum) : undefined,
+        aum: fromCroreInput(form.aum),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: profileKeys.mine })
@@ -76,7 +78,7 @@ const FirmProfileTab = () => {
         )}
         {mutation.isError && (
           <Alert variant="danger" className="mb-5">
-            {errorMessage(mutation.error)}
+            {actionError(mutation.error, "Couldn't save the firm profile — try again later.")}
           </Alert>
         )}
 
@@ -215,7 +217,7 @@ const StartupProfileTab = () => {
         )}
         {mutation.isError && (
           <Alert variant="danger" className="mb-5">
-            {errorMessage(mutation.error)}
+            {actionError(mutation.error, "Couldn't save the profile — try again later.")}
           </Alert>
         )}
 
@@ -344,8 +346,10 @@ interface TeamMemberRow {
 
 const TeamTab = () => {
   const { isStartup, entityId } = useProfile()
+  const { user } = useAuth()
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<string>(isStartup ? StartupRole.CO_FOUNDER : VCRole.STAFF)
+  const [removing, setRemoving] = useState<TeamMemberRow | null>(null)
   const queryClient = useQueryClient()
 
   // A firm has a single owner, so OWNER isn't offered when inviting.
@@ -388,7 +392,39 @@ const TeamTab = () => {
     },
   })
 
+  /**
+   * Removing a teammate and changing a VC role.
+   *
+   * Both endpoints already existed and nothing on the page reached them, so a firm could invite
+   * people and never undo it. The startup side has no role-change endpoint, so no role control is
+   * offered there rather than one that fails.
+   */
+  const remove = useMutation({
+    meta: { errorToast: false },
+    mutationFn: (member: TeamMemberRow) =>
+      isStartup
+        ? startupApi.removeMember(entityId as string, member.id)
+        : vcFirmApi.removeMember(entityId as string, member.id),
+    onSuccess: () => {
+      setRemoving(null)
+      invalidate()
+    },
+  })
+
+  const changeRole = useMutation({
+    meta: { errorToast: false },
+    mutationFn: ({ member, newRole }: { member: TeamMemberRow; newRole: VCRole }) =>
+      vcFirmApi.changeMemberRole(entityId as string, member.id, newRole),
+    onSuccess: invalidate,
+  })
+
   const members = query.data ?? []
+
+  // The single owner can't be demoted or removed, and nobody can remove themselves — both would
+  // leave the firm without an administrator.
+  const isOwner = (member: TeamMemberRow) => member.role === VCRole.OWNER
+  const isSelf = (member: TeamMemberRow) => member.userEmail === user?.email
+  const manageable = (member: TeamMemberRow) => !isOwner(member) && !isSelf(member)
 
   return (
     <div className="max-w-3xl space-y-5">
@@ -451,6 +487,7 @@ const TeamTab = () => {
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Joined</TableHead>
+                <TableHead className="w-16 text-right">Actions</TableHead>
               </tr>
             </TableHeader>
             <TableBody>
@@ -458,14 +495,41 @@ const TeamTab = () => {
                 <TableRow key={member.id}>
                   <TableCell className="font-medium text-ink">{member.userEmail}</TableCell>
                   <TableCell>
-                    <Badge variant="secondary">
-                      {vcRoleLabels[member.role as VCRole] ??
-                        startupRoleLabels[member.role as StartupRole] ??
-                        member.role}
-                    </Badge>
+                    {!isStartup && manageable(member) ? (
+                      <Select
+                        aria-label={`Role for ${member.userEmail}`}
+                        className="w-44"
+                        options={roleOptions}
+                        value={member.role}
+                        disabled={changeRole.isPending}
+                        onChange={(event) =>
+                          changeRole.mutate({ member, newRole: event.target.value as VCRole })
+                        }
+                      />
+                    ) : (
+                      <Badge variant="secondary">
+                        {vcRoleLabels[member.role as VCRole] ??
+                          startupRoleLabels[member.role as StartupRole] ??
+                          member.role}
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell className="text-sm text-ink-secondary">
                     {formatDate(member.joinedAt)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {manageable(member) && (
+                      <RowActions
+                        label={`Actions for ${member.userEmail}`}
+                        actions={[
+                          {
+                            label: 'Remove from team',
+                            destructive: true,
+                            onSelect: () => setRemoving(member),
+                          },
+                        ]}
+                      />
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -473,12 +537,34 @@ const TeamTab = () => {
           </Table>
         )}
       </Card>
+
+      {changeRole.isError && (
+        <Alert variant="danger">
+          {actionError(changeRole.error, "Couldn't change that role — try again later.")}
+        </Alert>
+      )}
+
+      <ConfirmDialog
+        open={removing !== null}
+        title="Remove from team?"
+        description={
+          removing
+            ? `${removing.userEmail} loses access immediately. Anything they added stays.`
+            : undefined
+        }
+        confirmLabel="Remove"
+        pendingLabel="Removing…"
+        isPending={remove.isPending}
+        error={remove.error}
+        onConfirm={() => removing && remove.mutate(removing)}
+        onCancel={() => setRemoving(null)}
+      />
     </div>
   )
 }
 
 const ThesisTab = () => {
-  const { firm } = useProfile()
+  const { firm, isLoading } = useProfile()
   const queryClient = useQueryClient()
 
   const mutation = useMutation({
@@ -503,17 +589,33 @@ const ThesisTab = () => {
         )}
         {mutation.isError && (
           <Alert variant="danger" className="mb-5">
-            {errorMessage(mutation.error)}
+            {actionError(mutation.error, "Couldn't save your thesis — try again later.")}
           </Alert>
         )}
 
-        <ThesisForm
-          thesis={firm?.thesis ?? null}
-          firmName={firm?.name ?? ''}
-          submitLabel="Save thesis"
-          pending={mutation.isPending}
-          onSubmit={(values) => mutation.mutate(values)}
-        />
+        {isLoading ? (
+          <SkeletonRows rows={4} />
+        ) : (
+          <ThesisForm
+            /*
+             * Keyed on the firm, because every field is seeded by a `useState` initialiser and
+             * those run once. Rendered before the profile query resolved, the form kept the empty
+             * values it was born with and showed a saved thesis as blank for the rest of the
+             * session. The key remounts it when real data arrives.
+             */
+            key={`${firm?.id ?? 'none'}:${firm?.thesis?.updatedAt ?? 'new'}`}
+            thesis={firm?.thesis ?? null}
+            firmName={firm?.name ?? ''}
+            // Falls back to what the firm profile already declares.
+            defaults={{
+              sectors: firm?.sectors ?? [],
+              stages: firm?.investmentStage ? [stageValue(firm.investmentStage)] : [],
+            }}
+            submitLabel="Save thesis"
+            pending={mutation.isPending}
+            onSubmit={(values) => mutation.mutate(values)}
+          />
+        )}
       </CardContent>
     </Card>
   )
@@ -530,17 +632,28 @@ const PlanTab = () => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: profileKeys.mine }),
   })
 
+  // Nothing stores a plan yet, so there is no current plan to mark and nothing to switch to.
+  // Saying so beats three identical "Switch to" buttons that each fail on click.
+  const plansAvailable = firm?.planTier !== undefined
+
   return (
     <>
       {changePlan.isError && (
         <Alert variant="danger" className="mb-5">
-          {errorMessage(changePlan.error)}
+          {actionError(changePlan.error, "Couldn't change your plan — try again later.")}
+        </Alert>
+      )}
+
+      {!plansAvailable && (
+        <Alert variant="info" className="mb-5" title="Plans aren't live yet">
+          Every firm has full access while billing is being built. We'll show your plan here once
+          it's switched on.
         </Alert>
       )}
 
       <div className="grid gap-4 md:grid-cols-3">
         {PLANS.map((plan) => {
-          const current = firm?.planTier === plan.tier
+          const current = plansAvailable && firm?.planTier === plan.tier
 
           return (
             <div
@@ -573,10 +686,11 @@ const PlanTab = () => {
               <Button
                 variant={current ? 'outline' : 'primary'}
                 className="mt-auto w-full"
-                disabled={current || changePlan.isPending}
+                disabled={current || !plansAvailable || changePlan.isPending}
                 onClick={() => changePlan.mutate(plan.tier)}
+                title={!plansAvailable ? 'Available once billing is switched on' : undefined}
               >
-                {current ? 'Current plan' : `Switch to ${plan.name}`}
+                {current ? 'Current plan' : !plansAvailable ? 'Included' : `Switch to ${plan.name}`}
               </Button>
             </div>
           )

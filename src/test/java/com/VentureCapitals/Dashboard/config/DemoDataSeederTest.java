@@ -106,6 +106,9 @@ class DemoDataSeederTest extends PostgresContainerTest {
         assertThat(firms.count()).isEqualTo(3);
         assertThat(startups.count()).isEqualTo(4);
         assertThat(investments.count()).isEqualTo(3);
+        // Two, not three: an exited position is not a tracked prospect, so ClinicOS is an
+        // investment only. The pool holds Vaultline and the off-platform Nimbus Grid.
+        assertThat(poolEntries.count()).isEqualTo(2);
         assertThat(poolEntries.count()).isEqualTo(3);
         assertThat(fundingCycles.count()).isEqualTo(2);
         assertThat(commitments.count()).isEqualTo(3);

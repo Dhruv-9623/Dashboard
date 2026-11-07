@@ -207,7 +207,13 @@ export const EventsPage = () => {
         title="Events"
         description="Demo days, networking, office hours, and webinars across the platform."
         actions={
-          <Button onClick={() => setCreateOpen(true)}>
+          // Hosting writes through the same API the list has just failed to read, so the form
+          // would only fail again on submit. Disabled with the reason until the list loads.
+          <Button
+            onClick={() => setCreateOpen(true)}
+            disabled={query.isError}
+            title={query.isError ? 'Available once events load' : undefined}
+          >
             <PlusIcon className="mr-2 h-4 w-4" />
             Host event
           </Button>

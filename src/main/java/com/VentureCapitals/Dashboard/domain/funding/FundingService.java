@@ -86,6 +86,9 @@ public class FundingService {
     }
 
     /** Open rounds across the platform — the VC-side deal flow. */
+    public Page<FundingCycle> listOpen(String sector, StartupStage stage, UUID startupId, Pageable pageable) {
+        String normalisedSector = (sector == null || sector.isBlank()) ? null : sector.trim();
+        return cycleRepository.findOpen(normalisedSector, stage, startupId, pageable);
     public Page<FundingCycle> listOpen(String sector, StartupStage stage, Pageable pageable) {
         String normalisedSector = (sector == null || sector.isBlank()) ? null : sector.trim();
         return cycleRepository.findOpen(normalisedSector, stage, pageable);

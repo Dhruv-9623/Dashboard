@@ -10,7 +10,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { AiOrb } from '@/components/ai/AiOrb'
 import { ErrorState } from '@/components/ErrorState'
 import { Card } from '@/components/ui/Card'
-import { buttonClass } from '@/components/ui/Button'
+import { Button, buttonClass } from '@/components/ui/Button'
 import { Tabs } from '@/components/ui/Tabs'
 import { SkeletonRows } from '@/components/ui/Skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table'
@@ -32,8 +32,16 @@ export const ReviewQueuePage = () => {
   })
 
   const deals = query.data ?? []
+  /**
+   * Undefined until the queue has actually loaded, which hides the badge.
+   *
+   * A failed or pending load left every tab reading "0", which is a claim — "there is nothing
+   * waiting on you" — made from no data at all, next to an error panel saying the list could not
+   * be fetched.
+   */
+  const settled = !query.isLoading && !query.isError
   const countFor = (status: OpportunityStatus) =>
-    deals.filter((deal) => deal.status === status).length
+    settled ? deals.filter((deal) => deal.status === status).length : undefined
 
   const visible = filter === 'ALL' ? deals : deals.filter((deal) => deal.status === filter)
 
@@ -43,10 +51,20 @@ export const ReviewQueuePage = () => {
         title="Deal Triage"
         description="Every opportunity is scored against your thesis on intake. Approve or reject from the queue."
         actions={
-          <Link to="/deal-triage/new" className={buttonClass()}>
-            <PlusIcon className="mr-2 h-4 w-4" aria-hidden="true" />
-            New opportunity
-          </Link>
+          /* Offering "New opportunity" while the queue itself can't be read invites the user to
+             add to a list we have just failed to show them — and the intake form reads the same
+             API. Disabled, with the reason, until the queue loads. */
+          query.isError ? (
+            <Button disabled title="Available once the queue loads">
+              <PlusIcon className="mr-2 h-4 w-4" aria-hidden="true" />
+              New opportunity
+            </Button>
+          ) : (
+            <Link to="/deal-triage/new" className={buttonClass()}>
+              <PlusIcon className="mr-2 h-4 w-4" aria-hidden="true" />
+              New opportunity
+            </Link>
+          )
         }
       />
 
@@ -75,7 +93,7 @@ export const ReviewQueuePage = () => {
             label: 'Rejected',
             count: countFor(OpportunityStatus.REJECTED),
           },
-          { value: 'ALL', label: 'All', count: deals.length },
+          { value: 'ALL', label: 'All', count: settled ? deals.length : undefined },
         ]}
       />
 

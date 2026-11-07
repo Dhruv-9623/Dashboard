@@ -85,7 +85,7 @@ export const VCFirmDetailPage = () => {
         <div className="grid gap-4 sm:grid-cols-3">
           <StatTile
             label="Assets under management"
-            value={firm.aum ? formatMoney(firm.aum * 1_000_000, 'INR') : '—'}
+            value={firm.aum ? formatMoney(firm.aum, 'INR') : '—'}
           />
           <StatTile label="Investment stage" value={firm.investmentStage ?? '—'} />
           <StatTile label="Founded" value={firm.foundedYear ?? '—'} />

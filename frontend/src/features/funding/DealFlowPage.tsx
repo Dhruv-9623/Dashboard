@@ -7,6 +7,11 @@ import {
   cycleStatusLabels,
   cycleStatusVariants,
   CommitmentStatus,
+  isLive,
+  LADDER_STATUSES,
+  ticketProblem,
+} from './types'
+import type { FundingCommitmentDTO, FundingCycleDTO } from './types'
   LADDER_STATUSES,
   ticketProblem,
 } from './types'
@@ -47,14 +52,23 @@ const commitOptions = LADDER_STATUSES.map((status) => ({
 
 const CommitModal = ({
   cycle,
+  existing,
   onClose,
 }: {
   cycle: FundingCycleDTO
+  /** The firm's current pledge on this round, if it already has one. */
+  existing?: FundingCommitmentDTO
   onClose: () => void
 }) => {
-  const [amount, setAmount] = useState('')
-  const [currency, setCurrency] = useState(cycle.currency)
-  const [status, setStatus] = useState(CommitmentStatus.INDICATED)
+  /*
+   * Prefilled from the firm's current pledge, because POSTing a commitment *replaces* it —
+   * the server treats a second pledge from the same firm as that firm changing its number.
+   * Opening empty on "Indicated" meant one click could silently demote a signed ₹6 Cr
+   * commitment to an indication, with no warning and no undo.
+   */
+  const [amount, setAmount] = useState(existing ? String(existing.amount) : '')
+  const [currency, setCurrency] = useState(existing?.currency ?? cycle.currency)
+  const [status, setStatus] = useState(existing?.status ?? CommitmentStatus.INDICATED)
   const queryClient = useQueryClient()
 
   /** Null when the pledge would be accepted. Checked here so the form answers immediately. */
@@ -81,6 +95,7 @@ const CommitModal = ({
     <Modal
       open
       onClose={onClose}
+      title={existing ? `Update your pledge to ${cycle.startupName}` : `Commit to ${cycle.startupName}`}
       title={`Commit to ${cycle.startupName}`}
       description={`${roundLabel(cycle.roundType)} · target ${formatMoney(cycle.targetAmount, cycle.currency)}`}
       footer={
@@ -93,7 +108,11 @@ const CommitModal = ({
             type="submit"
             disabled={!amount || Boolean(problem) || mutation.isPending}
           >
-            {mutation.isPending ? 'Submitting…' : 'Submit commitment'}
+            {mutation.isPending
+              ? 'Submitting…'
+              : existing
+                ? 'Update pledge'
+                : 'Submit commitment'}
           </Button>
         </>
       }
@@ -106,6 +125,15 @@ const CommitModal = ({
         }}
         className="space-y-4"
       >
+        {existing && (
+          <Alert variant="info">
+            Your firm has already pledged{' '}
+            <strong>{formatMoney(existing.amount, existing.currency)}</strong> to this round, marked{' '}
+            <strong>{commitmentStatusLabels[existing.status].toLowerCase()}</strong>. Saving replaces
+            that pledge rather than adding a second one.
+          </Alert>
+        )}
+
         <div className="grid gap-4 sm:grid-cols-[1fr_2fr]">
           <div>
             <Label htmlFor="commit-currency">Currency</Label>
@@ -178,6 +206,24 @@ export const DealFlowPage = () => {
     queryFn: () => fundingApi.listOpen(params),
     // Hold the previous page while the next one loads, rather than flashing a skeleton.
     placeholderData: keepPreviousData,
+  })
+
+  /**
+   * The firm's own pledges, so a round it has already backed says so before anything is clicked.
+   *
+   * Fetched as one page of the whole book rather than per round: deal flow shows at most 20 rounds
+   * and the book is small, so this is one request instead of twenty.
+   */
+  const bookParams = { size: 100 }
+  const book = useQuery({
+    queryKey: fundingKeys.book(bookParams),
+    queryFn: () => fundingApi.listMyCommitments(bookParams),
+  })
+
+  const pledgeByCycle = new Map(
+    (book.data?.items ?? []).filter(isLive).map((pledge) => [pledge.fundingCycleId, pledge])
+  )
+
   })
 
   const cycles = query.data?.items ?? []
@@ -268,9 +314,22 @@ export const DealFlowPage = () => {
                     </p>
                   </div>
 
+                  {pledgeByCycle.has(cycle.id) && (
+                    <p className="mt-3 text-xs text-ink-secondary">
+                      Your pledge:{' '}
+                      <span className="font-semibold text-ink">
+                        {formatMoney(
+                          pledgeByCycle.get(cycle.id)!.amount,
+                          pledgeByCycle.get(cycle.id)!.currency
+                        )}
+                      </span>{' '}
+                      · {commitmentStatusLabels[pledgeByCycle.get(cycle.id)!.status]}
+                    </p>
+                  )}
+
                   <div className="mt-4 flex gap-2">
                     <Button size="sm" onClick={() => setCommitting(cycle)}>
-                      Commit
+                      {pledgeByCycle.has(cycle.id) ? 'Update pledge' : 'Commit'}
                     </Button>
                     {safeUrl(cycle.pitchDeckUrl) && (
                       <a
@@ -307,6 +366,13 @@ export const DealFlowPage = () => {
         />
       )}
 
+      {committing && (
+        <CommitModal
+          cycle={committing}
+          existing={pledgeByCycle.get(committing.id)}
+          onClose={() => setCommitting(null)}
+        />
+      )}
       {committing && <CommitModal cycle={committing} onClose={() => setCommitting(null)} />}
     </>
   )

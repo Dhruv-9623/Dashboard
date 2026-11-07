@@ -2,6 +2,14 @@ import { ApiError } from './api-client'
 
 const NETWORK_MESSAGE = "Can't reach the server. Check your connection and try again."
 const SERVER_MESSAGE = 'Something went wrong on our end. Please try again.'
+const MISSING_MESSAGE = "That part of the app isn't available right now."
+
+/**
+ * Whether a message is really a route diagnostic — "No endpoint at /api/…", a bare path, or any
+ * text with an `/api/` segment in it. Those are written for us and may embed record ids.
+ */
+const looksLikeRoute = (message: string) =>
+  /\/api\//.test(message) || /^no endpoint\b/i.test(message.trim())
 
 /**
  * The one place that decides what a user is told about a failure.
@@ -22,6 +30,11 @@ export const errorMessage = (error: unknown, fallback = 'Something went wrong.')
   if (error instanceof ApiError) {
     if (error.status >= 500) return SERVER_MESSAGE
     if (error.status === 401) return 'Your session has ended. Sign in again to continue.'
+    // A 404 body that names a route is a diagnostic, not a sentence for a user, and the path can
+    // carry an internal id. Those are replaced; a written-for-humans 404 still shows as-is.
+    if (error.status === 404) {
+      return looksLikeRoute(error.message) ? MISSING_MESSAGE : error.message || MISSING_MESSAGE
+    }
     if (error.status === 404) return error.message || 'That item no longer exists.'
     // status 0 is the client-side network/timeout case, which already carries a
     // written-for-humans message from api-client.
@@ -29,4 +42,20 @@ export const errorMessage = (error: unknown, fallback = 'Something went wrong.')
   }
 
   return error instanceof Error && error.message ? error.message : fallback
+}
+
+/**
+ * What to tell someone whose *action* failed — sending a request, saving a form.
+ *
+ * Business rules still come through in the server's own words, because they are the useful part
+ * and they tell the user what to do differently: "You've already sent a request to this firm."
+ * Everything else — a missing endpoint, a 500, a dropped connection — becomes the caller's own
+ * sentence about the action, rather than a diagnostic the user can do nothing with.
+ */
+export const actionError = (error: unknown, fallback: string) => {
+  const generic =
+    errorMessage(error) === NETWORK_MESSAGE
+    || errorMessage(error) === SERVER_MESSAGE
+    || errorMessage(error) === MISSING_MESSAGE
+  return generic ? fallback : errorMessage(error, fallback)
 }

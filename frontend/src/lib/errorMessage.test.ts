@@ -39,6 +39,23 @@ describe('errorMessage', () => {
 
   it('falls back to plain language on a 404 with no message', () => {
     expect(errorMessage(new ApiError('ENTITY_NOT_FOUND', '', 404))).toBe(
+      "That part of the app isn't available right now."
+    )
+  })
+
+  it('never shows a 404 body that names a route', () => {
+    // These reached the screen verbatim, publishing an internal id with them.
+    expect(
+      errorMessage(new ApiError('ENTITY_NOT_FOUND', 'No endpoint at /api/vc/firms/e85dec0d/thesis', 404))
+    ).toBe("That part of the app isn't available right now.")
+    expect(errorMessage(new ApiError('ENTITY_NOT_FOUND', 'No endpoint at /api/insights', 404))).toBe(
+      "That part of the app isn't available right now."
+    )
+  })
+
+  it('still shows a 404 written for a person', () => {
+    expect(errorMessage(new ApiError('ENTITY_NOT_FOUND', 'That round has been deleted.', 404))).toBe(
+      'That round has been deleted.'
       'That item no longer exists.'
     )
   })

@@ -8,7 +8,8 @@ import { poolApi, poolKeys } from '@/features/pool/api'
 import { opportunityApi, opportunityKeys } from '@/features/deal-triage/api'
 import { OpportunityStatus } from '@/features/deal-triage/types'
 import { fundingApi, fundingKeys } from '@/features/funding/api'
-import { FundingCycleStatus } from '@/features/funding/types'
+import { FundingCycleStatus, pledgedAmount } from '@/features/funding/types'
+import { RoundProgress } from '@/features/funding/RoundProgress'
 import { messagingApi, messagingKeys } from '@/features/messaging/api'
 import { ConnectionStatus } from '@/features/messaging/types'
 import { suggestionApi, suggestionKeys } from '@/features/ai-suggestions/api'
@@ -228,6 +229,10 @@ const VCDashboard = () => {
   const summary = investments.data
   const loading = investments.isLoading || pool.isLoading
 
+  // Capital *at work*: positions still held. The all-status total belongs on the investment
+  // ledger, not here — counting an exited company's cheque as deployed put ₹9.30 Cr next to a
+  // two-company holding count that only came to ₹8.50 Cr.
+  const deployed = summary?.activeTotalsByCurrency ?? {}
   const deployed = summary?.totalsByCurrency ?? {}
   // Companies held, not cheques written — the card is labelled "holdings".
   const holdings = summary?.activeCompanyCount ?? 0
@@ -496,7 +501,9 @@ const StartupDashboard = () => {
   const rounds = cycles.data ?? []
   const open = rounds.find((cycle) => cycle.status === FundingCycleStatus.OPEN)
   const committedByRound = rounds.map((cycle) => ({ amount: cycle.committedAmount, currency: cycle.currency }))
-  const progress = open && open.targetAmount ? (open.committedAmount / open.targetAmount) * 100 : 0
+  // Everything pledged against the target, which is what the round's own progress bar measures.
+  // Committed-only here made the hero disagree with the bar directly beneath it.
+  const progress = open && open.targetAmount ? (pledgedAmount(open) / open.targetAmount) * 100 : 0
 
   return (
     <>
@@ -525,8 +532,10 @@ const StartupDashboard = () => {
         }
         facts={[
           { label: 'Rounds run', value: String(rounds.length) },
-          ...(open ? [{ label: 'Investors committed', value: String(open.commitmentCount) }] : []),
-          ...(open ? [{ label: 'Progress', value: `${Math.round(progress)}%` }] : []),
+          // "Investors", not "investors committed": the count covers every band, so a round
+          // carrying one signed cheque plus a soft and an indication claimed three commitments.
+          ...(open ? [{ label: 'Investors', value: String(open.commitmentCount) }] : []),
+          ...(open ? [{ label: 'Pledged', value: `${Math.round(progress)}%` }] : []),
         ]}
       />
 
@@ -558,9 +567,9 @@ const StartupDashboard = () => {
             accent="var(--viz-1)"
           />
           <MetricCard
-            label="Investors committed"
+            label="Investors"
             count={{ to: open?.commitmentCount ?? 0, format: (value) => String(Math.round(value)) }}
-            hint="On the open round"
+            hint="On the open round, every band"
             accent="var(--viz-3)"
           />
           <MetricCard
@@ -574,6 +583,18 @@ const StartupDashboard = () => {
 
       {open && (
         <div className="mt-4 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+          {/* The same component Funding Rounds and the round page draw, rather than a
+              hand-built two-segment bar. That one plotted committed money against the target
+              and ignored soft and indicated, so this screen reported 24% while the round
+              itself reported 50% — the same round, two different numbers. */}
+          <Card>
+            <CardHeader>
+              <CardTitle>{roundLabel(open.roundType)} progress</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <RoundProgress cycle={open} percent />
+            </CardContent>
+          </Card>
           <AllocationBar
             title={`${roundLabel(open.roundType)} progress`}
             description={`${formatMoney(open.committedAmount, open.currency)} committed of ${formatMoney(

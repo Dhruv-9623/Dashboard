@@ -1,22 +1,34 @@
 import type { ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { useDocumentTitle } from '@/lib/useDocumentTitle'
 import { cn } from '@/lib/utils'
 
 interface PageHeaderProps {
   title: string
   description?: string
+  /** Where "back" goes, for pages reached from a list. Rendered above the title. */
+  back?: { to: string; label: string }
   actions?: ReactNode
   /** Small facts about the page — counts, "updated 2 min ago", a status badge. */
   meta?: ReactNode
   className?: string
 }
 
-export const PageHeader = ({ title, description, actions, meta, className }: PageHeaderProps) => {
+export const PageHeader = ({ title, description, back, actions, meta, className }: PageHeaderProps) => {
   useDocumentTitle(title)
 
   return (
     <div className={cn('mb-5 flex flex-wrap items-start justify-between gap-x-6 gap-y-3', className)}>
       <div className="min-w-0">
+        {back && (
+          <Link
+            to={back.to}
+            className="link-target mb-1 inline-flex items-center gap-1 text-[13px] text-ink-muted hover:text-brand-ink hover:underline"
+          >
+            <span aria-hidden="true">←</span>
+            {back.label}
+          </Link>
+        )}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           {/* tabIndex -1 lets AppShell move focus here after navigation. */}
           <h1

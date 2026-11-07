@@ -5,10 +5,16 @@
  * writes to whatever database the API is pointed at — use a scratch database, not dashboard_dev.
  *
  *   npm --prefix frontend exec playwright install chromium   # once
- *   APP_URL=http://localhost:3002 API_URL=http://localhost:8081 npm --prefix frontend run test:e2e
+ *   APP_URL=http://localhost:3002 API_URL=http://localhost:8081 DB_NAME=dashboard_scratch \
+ *     npm --prefix frontend run test:e2e
+ *
+ * Pass DB_NAME and the run deletes its own records on the way out. Without it the fixtures stay
+ * behind and turn up on Discover as "Lumen E2E 1794005594198" — alongside the ones the funding
+ * smoke test used to leave, which is how both were first noticed during manual testing.
  *
  * Exits non-zero if any step fails, so CI can gate on it.
  */
+import { execFileSync } from 'node:child_process'
 import { chromium, request } from 'playwright'
 const APP = process.env.APP_URL ?? 'http://localhost:3002'
 const API = process.env.API_URL ?? 'http://localhost:8081'
@@ -128,13 +134,18 @@ step('on-platform company added to pool', poolText.includes(`Lumen E2E ${TS}`))
 step('stage comes from the startup profile', poolText.includes('Seed'), poolText.match(/Healthtech[^\n]*/)?.[0] ?? '')
 
 await v.getByRole('button', { name: 'Track company' }).first().click(); await v.waitForTimeout(400)
+// The form opens on "On platform" now, so an off-platform company needs the toggle first.
+await v.getByRole('button', { name: 'Not on platform', exact: true }).click(); await v.waitForTimeout(300)
 await v.getByLabel(/Company name/).fill('Nimbus E2E')
 await v.getByRole('button', { name: 'Add to pool' }).click(); await v.waitForTimeout(1500)
 poolText = await v.locator('main').innerText()
 step('off-platform company added', poolText.includes('Nimbus E2E'))
 
 const rowsBefore = await v.locator('tbody tr').count()
-await v.getByRole('button', { name: 'Remove' }).first().click(); await v.waitForTimeout(400)
+// Remove lives in the row's "..." menu, not as an inline button — it moved there when row
+// actions were consolidated, and this step had been clicking a button that no longer existed.
+await v.locator('button[aria-label^="Actions for"]').first().click(); await v.waitForTimeout(400)
+await v.getByRole('menuitem', { name: 'Remove' }).click(); await v.waitForTimeout(400)
 step('remove asks for confirmation first',
   await v.getByRole('dialog').isVisible() && (await v.locator('tbody tr').count()) === rowsBefore)
 await v.getByRole('dialog').getByRole('button', { name: 'Remove' }).click(); await v.waitForTimeout(1500)
@@ -151,6 +162,43 @@ step('no unexpected console errors', errors.filter(e => !/404|Failed to load res
 console.log(`\nRESULT: ${results.filter(Boolean).length} passed, ${results.filter(x => !x).length} failed`)
 await b.close()
 await api.dispose()
+
+/**
+ * Removes this run's records. Keyed on TS, which every name and address it creates carries, so it
+ * cannot touch demo or hand-entered data. Only runs when told which database to clean.
+ */
+const cleanUp = () => {
+  const db = process.env.DB_NAME
+  if (!db) return
+  const sql = `
+BEGIN;
+CREATE TEMP TABLE s AS SELECT id FROM startups WHERE name LIKE '%${TS}';
+CREATE TEMP TABLE f AS SELECT id FROM vc_firms WHERE name LIKE '%${TS}';
+CREATE TEMP TABLE u AS SELECT id FROM users WHERE email LIKE '%-${TS}@live.test';
+DELETE FROM commitment_events WHERE vc_firm_id IN (SELECT id FROM f)
+   OR funding_cycle_id IN (SELECT id FROM funding_cycles WHERE startup_id IN (SELECT id FROM s));
+DELETE FROM funding_commitments WHERE vc_firm_id IN (SELECT id FROM f)
+   OR funding_cycle_id IN (SELECT id FROM funding_cycles WHERE startup_id IN (SELECT id FROM s));
+DELETE FROM funding_cycles WHERE startup_id IN (SELECT id FROM s);
+DELETE FROM investments WHERE vc_firm_id IN (SELECT id FROM f) OR startup_id IN (SELECT id FROM s);
+DELETE FROM pool_entries WHERE vc_firm_id IN (SELECT id FROM f) OR startup_id IN (SELECT id FROM s);
+DELETE FROM vc_firm_members WHERE firm_id IN (SELECT id FROM f) OR user_id IN (SELECT id FROM u);
+DELETE FROM startup_members WHERE startup_id IN (SELECT id FROM s) OR user_id IN (SELECT id FROM u);
+DELETE FROM startups WHERE id IN (SELECT id FROM s);
+DELETE FROM vc_firms WHERE id IN (SELECT id FROM f);
+DELETE FROM users WHERE id IN (SELECT id FROM u);
+COMMIT;
+`
+  try {
+    execFileSync('docker', ['compose', 'exec', '-T', 'postgres', 'psql', '-U', 'postgres', '-d', db, '-q'],
+      { input: sql, stdio: ['pipe', 'ignore', 'ignore'] })
+    console.log(`Cleaned this run's records from ${db}.`)
+  } catch {
+    console.log(`Could not clean ${db} — remove this run's records (suffix ${TS}) by hand.`)
+  }
+}
+
+cleanUp()
 
 const failed = results.filter((ok) => !ok).length
 process.exit(failed === 0 ? 0 : 1)

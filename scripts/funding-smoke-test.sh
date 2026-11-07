@@ -9,6 +9,11 @@
 # THE API IS POINTED AT. Use a scratch database:
 #
 #   DB_NAME=dashboard_funding PORT=8081 scripts/dev-up.sh
+#   API_URL=http://localhost:8081 DB_NAME=dashboard_funding scripts/funding-smoke-test.sh
+#
+# Pass DB_NAME and the run deletes its own records on the way out. Without it the fixtures stay
+# in the database and show up in Discover as "Harbourline 1793533577" and friends, which is how
+# they first turned up during manual testing.
 #   API_URL=http://localhost:8081 scripts/funding-smoke-test.sh
 #
 # Exits non-zero if any check fails.
@@ -16,6 +21,34 @@ set -uo pipefail
 
 B=${API_URL:-http://localhost:8081}
 D=$(mktemp -d); TS=$(date +%s); PASS=0; FAIL=0
+
+# Removes this run's records. Keyed on $TS, which every name and address it creates carries, so
+# it cannot touch demo or hand-entered data. Only runs when told which database to clean.
+cleanup() {
+  rm -rf "$D"
+  [ -n "${DB_NAME:-}" ] || return 0
+  docker compose exec -T postgres psql -U postgres -d "$DB_NAME" -q >/dev/null 2>&1 <<SQL
+BEGIN;
+CREATE TEMP TABLE s AS SELECT id FROM startups WHERE name LIKE '% $TS';
+CREATE TEMP TABLE f AS SELECT id FROM vc_firms WHERE name LIKE '% $TS';
+CREATE TEMP TABLE u AS SELECT id FROM users WHERE email LIKE '%-$TS@fund.test';
+DELETE FROM commitment_events WHERE vc_firm_id IN (SELECT id FROM f)
+   OR funding_cycle_id IN (SELECT id FROM funding_cycles WHERE startup_id IN (SELECT id FROM s));
+DELETE FROM funding_commitments WHERE vc_firm_id IN (SELECT id FROM f)
+   OR funding_cycle_id IN (SELECT id FROM funding_cycles WHERE startup_id IN (SELECT id FROM s));
+DELETE FROM funding_cycles WHERE startup_id IN (SELECT id FROM s);
+DELETE FROM investments WHERE vc_firm_id IN (SELECT id FROM f) OR startup_id IN (SELECT id FROM s);
+DELETE FROM pool_entries WHERE vc_firm_id IN (SELECT id FROM f) OR startup_id IN (SELECT id FROM s);
+DELETE FROM vc_firm_members WHERE firm_id IN (SELECT id FROM f) OR user_id IN (SELECT id FROM u);
+DELETE FROM startup_members WHERE startup_id IN (SELECT id FROM s) OR user_id IN (SELECT id FROM u);
+DELETE FROM startups WHERE id IN (SELECT id FROM s);
+DELETE FROM vc_firms WHERE id IN (SELECT id FROM f);
+DELETE FROM users WHERE id IN (SELECT id FROM u);
+COMMIT;
+SQL
+  echo "Cleaned this run's records from $DB_NAME."
+}
+trap cleanup EXIT
 trap 'rm -rf "$D"' EXIT
 
 if [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$B/api/auth/me")" = 000 ]; then

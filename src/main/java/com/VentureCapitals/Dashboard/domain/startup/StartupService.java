@@ -3,6 +3,7 @@ package com.VentureCapitals.Dashboard.domain.startup;
 import com.VentureCapitals.Dashboard.common.exception.BusinessRuleViolationException;
 import com.VentureCapitals.Dashboard.common.exception.EntityNotFoundException;
 import com.VentureCapitals.Dashboard.common.exception.UnauthorizedException;
+import com.VentureCapitals.Dashboard.domain.funding.FundingCycleRepository;
 import com.VentureCapitals.Dashboard.domain.user.User;
 import com.VentureCapitals.Dashboard.domain.user.UserRepository;
 import com.VentureCapitals.Dashboard.domain.user.UserType;
@@ -10,12 +11,15 @@ import com.VentureCapitals.Dashboard.domain.vc.VCMemberRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -30,13 +34,20 @@ public class StartupService {
     private final StartupMemberRepository memberRepository;
     private final UserRepository userRepository;
     private final VCMemberRepository vcMemberRepository;
+    /**
+     * The repository, not FundingService: this only needs to know which rounds are open, and
+     * depending on the service would make the two services circular.
+     */
+    private final FundingCycleRepository fundingCycleRepository;
 
     public StartupService(StartupRepository startupRepository, StartupMemberRepository memberRepository,
-                          UserRepository userRepository, VCMemberRepository vcMemberRepository) {
+                          UserRepository userRepository, VCMemberRepository vcMemberRepository,
+                          FundingCycleRepository fundingCycleRepository) {
         this.startupRepository = startupRepository;
         this.memberRepository = memberRepository;
         this.userRepository = userRepository;
         this.vcMemberRepository = vcMemberRepository;
+        this.fundingCycleRepository = fundingCycleRepository;
     }
 
     /** Creates the profile and makes the creator its FOUNDER. */
@@ -82,16 +93,40 @@ public class StartupService {
     }
 
     /**
-     * Discovery. {@code raisingOnly} needs funding cycles, which aren't built yet, so it returns
-     * nothing rather than pretending every startup is (or isn't) raising.
+     * Discovery, narrowed to startups with a round open when {@code raisingOnly} is set.
+     *
+     * <p>This used to return an empty page, because funding cycles did not exist when it was
+     * written. They do now, so "Raising now" filters instead of blanking the list.
      */
     @Transactional(readOnly = true)
     public Page<Startup> searchStartups(String search, String sector, StartupStage stage,
                                         boolean raisingOnly, Pageable pageable) {
+        Specification<Startup> spec = StartupRepository.matching(search, sector, stage);
         if (raisingOnly) {
-            return Page.empty(pageable);
+            Set<UUID> raising = fundingCycleRepository.findAllRaising();
+            if (raising.isEmpty()) {
+                return Page.empty(pageable);
+            }
+            spec = spec.and((root, query, cb) -> root.get("id").in(raising));
         }
-        return startupRepository.findAll(StartupRepository.matching(search, sector, stage), pageable);
+        return startupRepository.findAll(spec, pageable);
+    }
+
+    /**
+     * Which of these startups have a round open.
+     *
+     * <p>Exposed so a controller can decorate a whole page in one query rather than the mapper
+     * asking per row. Startups the caller did not ask about are simply absent from the result.
+     */
+    @Transactional(readOnly = true)
+    public Set<UUID> raisingAmong(Collection<UUID> startupIds) {
+        return startupIds.isEmpty() ? Set.of() : fundingCycleRepository.findRaisingAmong(startupIds);
+    }
+
+    /** Whether this one startup has a round open. */
+    @Transactional(readOnly = true)
+    public boolean isRaising(UUID startupId) {
+        return !fundingCycleRepository.findRaisingAmong(List.of(startupId)).isEmpty();
     }
 
     @Transactional(readOnly = true)

@@ -37,7 +37,14 @@ export interface VCFirmDTO {
   sectors?: string[]
   location?: string
   foundedYear?: number
-  planTier: PlanTier
+  /**
+   * Absent until the server stores one.
+   *
+   * There is no plan_tier column, entity field or endpoint behind this yet, so the real API never
+   * sends it. Typed as required, it made every plan card compare false and the Plan tab offered
+   * three identical "Switch to" buttons, each of which 404s.
+   */
+  planTier?: PlanTier
   thesis: ThesisDTO | null
   createdAt: string
   updatedAt: string

@@ -41,6 +41,8 @@ export interface InvestmentDTO {
 export interface InvestmentSummaryDTO {
   /** Whole-unit totals per ISO currency code; never summed across currencies. */
   totalsByCurrency: Record<string, number>
+  /** The same, counting only positions still held — "capital at work", excluding exits. */
+  activeTotalsByCurrency: Record<string, number>
   totalCount: number
   /** Active positions — one per cheque, so a follow-on counts twice. */
   activeCount: number

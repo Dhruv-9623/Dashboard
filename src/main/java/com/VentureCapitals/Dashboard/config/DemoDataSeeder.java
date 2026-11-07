@@ -114,8 +114,11 @@ public class DemoDataSeeder implements ApplicationRunner {
         Startup vaultline = startup("Vaultline", "SaaS", StartupStage.PRE_SEED,
                 "Compliance evidence collection for companies chasing their first SOC 2.", "Hyderabad", 2024, null, 6);
 
+        // Both on Ledgerly: the account called "cofounder" used to be a FOUNDER of Shiprack, so
+        // signing in as it showed a different startup and Ledgerly's team page listed one person.
+        // A two-person team is also the only way to exercise the CO_FOUNDER role in the demo.
         founder(ledgerly, user("founder", UserType.STARTUP), StartupRole.FOUNDER);
-        founder(shiprack, user("cofounder", UserType.STARTUP), StartupRole.FOUNDER);
+        founder(ledgerly, user("cofounder", UserType.STARTUP), StartupRole.CO_FOUNDER);
 
         investments.save(investment(firm, ledgerly, LocalDate.now().minusMonths(14),
                 60_000_000L, InvestmentRound.SERIES_A, new BigDecimal("9.50"), InvestmentStatus.ACTIVE,
@@ -130,8 +133,9 @@ public class DemoDataSeeder implements ApplicationRunner {
         poolEntries.save(pool(firm, vaultline, null, manager, InterestLevel.HIGH_PRIORITY,
                 List.of("SOC 2", "founder-led sales"),
                 "Warm intro from the Ledgerly founder. Wants to raise in Q1."));
-        poolEntries.save(pool(firm, clinicOS, null, manager, InterestLevel.WATCHING,
-                List.of("healthtech"), "Tracking post-exit; founders are building again."));
+        // No pool entry for ClinicOS. The pool is "tracking, not yet invested" (see CLAUDE.md),
+        // and ClinicOS is an exited position — listing it in both places made the same company
+        // appear as a holding and as a prospect on two screens at once.
         poolEntries.save(pool(firm, null, "Nimbus Grid", manager, InterestLevel.INTERESTED,
                 List.of("climate", "off-platform"),
                 "Battery analytics, not on the platform yet. Met at the Bengaluru demo day."));
@@ -188,7 +192,7 @@ public class DemoDataSeeder implements ApplicationRunner {
         log.info("""
                 Demo data seeded.
                   VC:      owner{0}, pm{0}, staff{0}   (firm: Meridian Ventures)
-                  Startup: founder{0} (Ledgerly), cofounder{0} (Shiprack)
+                  Startup: founder{0}, cofounder{0}   (startup: Ledgerly)
                   Password for all of them comes from DEMO_PASSWORD / app.demo.password.
                 """.replace("{0}", DEMO_DOMAIN));
     }

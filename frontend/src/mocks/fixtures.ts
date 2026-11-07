@@ -25,7 +25,7 @@ export const makeDb = () => ({
     description:
       'Early-stage fund backing technical founders building for Indian SMBs. We lead seed rounds and hold reserves through Series A.',
     website: 'https://meridian.vc',
-    aum: 480,
+    aum: 4800000000,
     investmentStage: 'Seed',
     sectors: ['Fintech', 'SaaS', 'Logistics', 'AI/ML'],
     location: 'Bengaluru, India',
@@ -49,6 +49,13 @@ export const makeDb = () => ({
     { id: 'm-1', userId: 'u-1', userEmail: 'arjun@meridian.vc', firmId: 'f-1', role: 'OWNER', joinedAt: iso(900), createdAt: iso(900), updatedAt: iso(900) },
     { id: 'm-2', userId: 'u-2', userEmail: 'divya@meridian.vc', firmId: 'f-1', role: 'PORTFOLIO_MANAGER', joinedAt: iso(420), createdAt: iso(420), updatedAt: iso(420) },
     { id: 'm-3', userId: 'u-3', userEmail: 'sameer@meridian.vc', firmId: 'f-1', role: 'STAFF', joinedAt: iso(120), createdAt: iso(120), updatedAt: iso(120) },
+  ],
+
+  // Mutable so removing a teammate actually removes one. The handler used to answer from a
+  // literal array, so a delete reported success and the row came straight back.
+  startupMembers: [
+    { id: 'sm-1', userId: 'u-9', userEmail: 'priya@lumen.health', startupId: 's-1', role: 'FOUNDER', joinedAt: iso(400), createdAt: iso(400), updatedAt: iso(400) },
+    { id: 'sm-2', userId: 'u-10', userEmail: 'kabir@lumen.health', startupId: 's-1', role: 'CO_FOUNDER', joinedAt: iso(400), createdAt: iso(400), updatedAt: iso(400) },
   ],
 
   startups: [
@@ -133,9 +140,9 @@ export const makeDb = () => ({
   ],
 
   firms: [
-    { id: 'f-2', name: 'Cascade Partners', description: 'Multi-stage fund with a focus on B2B infrastructure.', website: 'https://cascade.partners', aum: 1200, investmentStage: 'Series A', sectors: ['SaaS', 'Fintech', 'Deeptech'], location: 'Mumbai', foundedYear: 2014, planTier: 'GROWTH', thesis: null, createdAt: iso(2000), updatedAt: iso(100) },
-    { id: 'f-3', name: 'Ganges Capital', description: 'Seed fund backing founders outside metro hubs.', website: 'https://ganges.capital', aum: 220, investmentStage: 'Seed', sectors: ['Agritech', 'Logistics', 'Consumer'], location: 'Kolkata', foundedYear: 2020, planTier: 'STARTER', thesis: null, createdAt: iso(1400), updatedAt: iso(80) },
-    { id: 'f-4', name: 'Northlight', description: 'Pre-seed cheques for technical founders, first money in.', website: 'https://northlight.fund', aum: 90, investmentStage: 'Pre-Seed', sectors: ['AI/ML', 'SaaS'], location: 'Bengaluru', foundedYear: 2022, planTier: 'FREE', thesis: null, createdAt: iso(900), updatedAt: iso(40) },
+    { id: 'f-2', name: 'Cascade Partners', description: 'Multi-stage fund with a focus on B2B infrastructure.', website: 'https://cascade.partners', aum: 12000000000, investmentStage: 'Series A', sectors: ['SaaS', 'Fintech', 'Deeptech'], location: 'Mumbai', foundedYear: 2014, planTier: 'GROWTH', thesis: null, createdAt: iso(2000), updatedAt: iso(100) },
+    { id: 'f-3', name: 'Ganges Capital', description: 'Seed fund backing founders outside metro hubs.', website: 'https://ganges.capital', aum: 2200000000, investmentStage: 'Seed', sectors: ['Agritech', 'Logistics', 'Consumer'], location: 'Kolkata', foundedYear: 2020, planTier: 'STARTER', thesis: null, createdAt: iso(1400), updatedAt: iso(80) },
+    { id: 'f-4', name: 'Northlight', description: 'Pre-seed cheques for technical founders, first money in.', website: 'https://northlight.fund', aum: 900000000, investmentStage: 'Pre-Seed', sectors: ['AI/ML', 'SaaS'], location: 'Bengaluru', foundedYear: 2022, planTier: 'FREE', thesis: null, createdAt: iso(900), updatedAt: iso(40) },
   ],
 
   opportunities: [

@@ -13,6 +13,8 @@ import type {
 export interface DealFlowParams extends PageParams {
   sector?: string
   stage?: string
+  /** One startup's open round, for its profile page — avoids paging all of deal flow. */
+  startupId?: string
 }
 
 export interface CommitmentBookParams extends PageParams {

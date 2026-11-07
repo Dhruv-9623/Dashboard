@@ -35,7 +35,12 @@ export const useWishlistToggle = (targetType: WishlistTargetType) => {
     },
     onError: (_error, _targetId, context) => {
       // Put the previous list back, then say what failed.
-      if (context?.previous) queryClient.setQueryData(wishlistKeys.all, context.previous)
+      //
+      // Restored whenever `onMutate` ran, even if the snapshot it took was `undefined`. Guarding
+      // on the snapshot's truthiness instead left the optimistic entry in the cache in the one
+      // case that matters: the list request had failed too, so there was nothing to put back, and
+      // the heart stayed filled beside a toast saying the save had failed.
+      if (context) queryClient.setQueryData(wishlistKeys.all, context.previous)
       toast.error(
         context?.wasSaved ? "Couldn't remove from your wishlist" : "Couldn't save to your wishlist"
       )

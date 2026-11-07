@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/Textarea'
 import { Label, FieldHint } from '@/components/ui/Label'
 import { Alert } from '@/components/ui/Alert'
 import { MessageIcon } from '@/components/icons'
-import { errorMessage } from '@/components/ErrorState'
+import { actionError } from '@/lib/errorMessage'
 
 interface ConnectButtonProps {
   targetType: 'VC_FIRM' | 'STARTUP'
@@ -74,7 +74,7 @@ export const ConnectButton = ({ targetType, targetId, targetName }: ConnectButto
             <FieldHint>Optional, but a short note meaningfully raises acceptance rates.</FieldHint>
             {mutation.isError && (
               <Alert variant="danger" className="mt-3">
-                {errorMessage(mutation.error)}
+                {actionError(mutation.error, "Couldn't send the request — try again later.")}
               </Alert>
             )}
           </>

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
 import { startupApi, startupKeys } from './api'
+import { fundingApi, fundingKeys } from '@/features/funding/api'
 import { useAuth } from '@/features/auth/useAuth'
 import { UserType } from '@/features/auth/types'
 import { ConnectButton } from '@/features/messaging/ConnectButton'
@@ -13,7 +14,7 @@ import { buttonClass } from '@/components/ui/Button'
 import { safeUrl } from '@/lib/utils'
 import { Badge } from '@/components/ui/Badge'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { FileIcon, MailIcon } from '@/components/icons'
+import { CoinsIcon, FileIcon, MailIcon } from '@/components/icons'
 import { formatMoney, stageLabel } from '@/lib/constants'
 
 export const StartupDetailPage = () => {
@@ -26,6 +27,20 @@ export const StartupDetailPage = () => {
     queryFn: () => startupApi.get(id),
     enabled: Boolean(id),
   })
+
+  /**
+   * This startup's open round, so an investor can act on it from the profile.
+   *
+   * The page showed "Actively raising" and then offered no way to do anything about it, which
+   * sent the investor back to deal flow to find the same company again.
+   */
+  const openRoundParams = { startupId: id, size: 1 }
+  const openRound = useQuery({
+    queryKey: fundingKeys.open(openRoundParams),
+    queryFn: () => fundingApi.listOpen(openRoundParams),
+    enabled: Boolean(id) && isVC && query.data?.isRaising === true,
+  })
+  const round = openRound.data?.items?.[0]
 
   if (query.isLoading) return <Skeleton className="h-96 w-full" />
   if (query.isError || !query.data) {
@@ -44,9 +59,16 @@ export const StartupDetailPage = () => {
       <PageHeader
         title={startup.name}
         description={`${startup.sector} · ${stageLabel(startup.stage)}${startup.location ? ` · ${startup.location}` : ''}`}
+        back={isVC ? { to: '/discover', label: 'Discover startups' } : undefined}
         actions={
           isVC ? (
             <>
+              {round && (
+                <Link to={`/rounds/${round.id}`} className={buttonClass()}>
+                  <CoinsIcon className="mr-2 h-4 w-4" aria-hidden="true" />
+                  View round
+                </Link>
+              )}
               <Link to={`/outreach?startupId=${startup.id}`} className={buttonClass({ variant: 'outline' })}>
                 <MailIcon className="mr-2 h-4 w-4" aria-hidden="true" />
                 Outreach
