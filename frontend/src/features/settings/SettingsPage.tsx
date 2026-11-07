@@ -45,6 +45,8 @@ const FirmProfileTab = () => {
   })
 
   const mutation = useMutation({
+    // Reported in place, so it opts out of the global error toast.
+    meta: { errorToast: false },
     mutationFn: () =>
       vcFirmApi.updateFirm(firm?.id ?? '', {
         name: form.name.trim(),
@@ -180,6 +182,8 @@ const StartupProfileTab = () => {
   })
 
   const mutation = useMutation({
+    // Reported in place, so it opts out of the global error toast.
+    meta: { errorToast: false },
     mutationFn: () =>
       startupApi.update(startup?.id ?? '', {
         name: form.name.trim(),
@@ -366,6 +370,8 @@ const TeamTab = () => {
   }
 
   const add = useMutation({
+    // Reported in place, so it opts out of the global error toast.
+    meta: { errorToast: false },
     mutationFn: async () => {
       if (isStartup) {
         await startupApi.addMember(entityId as string, email.trim(), role as StartupRole)
@@ -476,6 +482,8 @@ const ThesisTab = () => {
   const queryClient = useQueryClient()
 
   const mutation = useMutation({
+    // Reported in place, so it opts out of the global error toast.
+    meta: { errorToast: false },
     mutationFn: (values: ThesisFormValues) =>
       vcFirmApi.updateThesis(firm?.id ?? '', values),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: profileKeys.mine }),
@@ -516,6 +524,8 @@ const PlanTab = () => {
   const queryClient = useQueryClient()
 
   const changePlan = useMutation({
+    // Reported in place, so it opts out of the global error toast.
+    meta: { errorToast: false },
     mutationFn: (tier: PlanTier) => vcFirmApi.selectPlan(firm?.id ?? '', tier),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: profileKeys.mine }),
   })

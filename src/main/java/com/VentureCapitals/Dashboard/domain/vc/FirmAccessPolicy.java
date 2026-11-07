@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.EnumSet;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -31,8 +32,17 @@ public class FirmAccessPolicy {
 
     /** The actor's membership, whichever firm it is. For "my firm" endpoints. */
     public VCMember requireAnyMembership(User actor) {
-        return vcMemberRepository.findByUserId(actor.getId())
+        return findMembership(actor)
                 .orElseThrow(() -> new UnauthorizedException("You are not a member of a VC firm"));
+    }
+
+    /**
+     * The actor's membership if they have one, for the cases where not being in a firm is a
+     * legitimate answer rather than an error — a resource visible to founders and to investors
+     * alike has to ask "are you a member?" without throwing at a founder.
+     */
+    public Optional<VCMember> findMembership(User actor) {
+        return vcMemberRepository.findByUserId(actor.getId());
     }
 
     /** The actor must belong to {@code firmId} with one of {@code allowedRoles}. */

@@ -34,7 +34,7 @@ import {
 } from '@/components/ui/Table'
 import type { SortDirection } from '@/components/ui/Table'
 import { PlusIcon, RocketIcon, TrashIcon } from '@/components/icons'
-import { formatCurrencyTotals, formatDate, formatMoney } from '@/lib/constants'
+import { formatCurrencyTotals, formatDate, formatMoney, pluralize } from '@/lib/constants'
 import { useEntrance, useOrderTransition } from '@/lib/useMotion'
 
 const statusVariants: Record<InvestmentStatus, 'success' | 'secondary' | 'danger'> = {
@@ -95,6 +95,8 @@ export const InvestmentsPage = () => {
   const summary = useQuery({ queryKey: investmentKeys.summary, queryFn: investmentApi.summary })
 
   const remove = useMutation({
+    // Shown inside the confirm dialog, so it opts out of the global error toast.
+    meta: { errorToast: false },
     mutationFn: (id: string) => investmentApi.remove(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: investmentKeys.all })
@@ -170,7 +172,14 @@ export const InvestmentsPage = () => {
           />
           <MetricCard
             label="Active holdings"
-            count={{ to: totals.activeCount, format: (value) => String(Math.round(value)) }}
+            // Companies, not cheques. A follow-on is a second position in a company already held,
+            // and counting rows made this climb every time one was recorded.
+            count={{ to: totals.activeCompanyCount, format: (value) => String(Math.round(value)) }}
+            hint={
+              totals.activeCount === totals.activeCompanyCount
+                ? undefined
+                : pluralize(totals.activeCount, 'active position')
+            }
             accent="var(--viz-2)"
           />
           <MetricCard
@@ -225,7 +234,7 @@ export const InvestmentsPage = () => {
                   <div className="min-w-0 flex-1">
                     <Link
                       to={`/startups/${item.startupId}`}
-                      className="block truncate text-sm font-medium text-ink hover:text-brand-ink hover:underline"
+                      className="link-target block truncate text-sm font-medium text-ink hover:text-brand-ink hover:underline"
                     >
                       {item.startupName}
                     </Link>

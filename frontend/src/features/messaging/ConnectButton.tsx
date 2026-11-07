@@ -20,6 +20,8 @@ export const ConnectButton = ({ targetType, targetId, targetName }: ConnectButto
   const [message, setMessage] = useState('')
 
   const mutation = useMutation({
+    // Reported in place, so it opts out of the global error toast.
+    meta: { errorToast: false },
     mutationFn: () =>
       messagingApi.requestConnection({
         targetType,

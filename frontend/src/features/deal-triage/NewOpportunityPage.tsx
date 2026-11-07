@@ -36,6 +36,8 @@ export const NewOpportunityPage = () => {
   })
 
   const mutation = useMutation({
+    // Reported in place, so it opts out of the global error toast.
+    meta: { errorToast: false },
     mutationFn: () => {
       const payload: CreateOpportunityRequest = {
         companyName: form.companyName.trim(),

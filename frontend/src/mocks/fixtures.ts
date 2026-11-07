@@ -78,18 +78,58 @@ export const makeDb = () => ({
   ],
 
   cycles: [
-    { id: 'fc-1', startupId: 's-1', startupName: 'Lumen Health', startupSector: 'Healthtech', startupStage: 'SEED', roundType: 'Seed', targetAmount: 80_000_000, currency: 'INR', minTicketSize: 10_000_000, maxTicketSize: 40_000_000, status: 'OPEN', pitchDeckUrl: 'https://example.com/lumen-deck', dataRoomUrl: null, openedAt: iso(35), closedAt: null, committedAmount: 47_000_000, commitmentCount: 3 },
-    { id: 'fc-2', startupId: 's-6', startupName: 'Vaultline', startupSector: 'Fintech', startupStage: 'SEED', roundType: 'Seed', targetAmount: 60_000_000, currency: 'INR', minTicketSize: 5_000_000, maxTicketSize: 30_000_000, status: 'OPEN', pitchDeckUrl: 'https://example.com/vl-deck', dataRoomUrl: null, openedAt: iso(20), closedAt: null, committedAmount: 18_000_000, commitmentCount: 2 },
-    { id: 'fc-3', startupId: 's-7', startupName: 'Stackline AI', startupSector: 'AI/ML', startupStage: 'SEED', roundType: 'Seed', targetAmount: 100_000_000, currency: 'INR', minTicketSize: 15_000_000, maxTicketSize: 50_000_000, status: 'OPEN', pitchDeckUrl: null, dataRoomUrl: null, openedAt: iso(12), closedAt: null, committedAmount: 25_000_000, commitmentCount: 1 },
-    { id: 'fc-4', startupId: 's-4', startupName: 'Cohortly', startupSector: 'SaaS', startupStage: 'PRE_SEED', roundType: 'Pre-Seed', targetAmount: 25_000_000, currency: 'INR', minTicketSize: 2_500_000, maxTicketSize: 10_000_000, status: 'PAUSED', pitchDeckUrl: null, dataRoomUrl: null, openedAt: iso(60), closedAt: null, committedAmount: 6_000_000, commitmentCount: 1 },
+    { id: 'fc-1', startupId: 's-1', startupName: 'Lumen Health', startupSector: 'Healthtech', startupStage: 'SEED', roundType: 'SEED', targetAmount: 80_000_000, currency: 'INR', minTicketSize: 10_000_000, maxTicketSize: 40_000_000, status: 'OPEN', pitchDeckUrl: 'https://example.com/lumen-deck', dataRoomUrl: null, openedAt: iso(35), closedAt: null, committedAmount: 47_000_000, softCommittedAmount: 22_000_000, indicatedAmount: 9_000_000, commitmentCount: 3 },
+    { id: 'fc-2', startupId: 's-6', startupName: 'Vaultline', startupSector: 'Fintech', startupStage: 'SEED', roundType: 'SEED', targetAmount: 60_000_000, currency: 'INR', minTicketSize: 5_000_000, maxTicketSize: 30_000_000, status: 'OPEN', pitchDeckUrl: 'https://example.com/vl-deck', dataRoomUrl: null, openedAt: iso(20), closedAt: null, committedAmount: 18_000_000, softCommittedAmount: 12_000_000, indicatedAmount: 6_000_000, commitmentCount: 2 },
+    { id: 'fc-3', startupId: 's-7', startupName: 'Stackline AI', startupSector: 'AI/ML', startupStage: 'SEED', roundType: 'SEED', targetAmount: 100_000_000, currency: 'INR', minTicketSize: 15_000_000, maxTicketSize: 50_000_000, status: 'OPEN', pitchDeckUrl: null, dataRoomUrl: null, openedAt: iso(12), closedAt: null, committedAmount: 25_000_000, softCommittedAmount: 30_000_000, indicatedAmount: 15_000_000, commitmentCount: 1 },
+    { id: 'fc-4', startupId: 's-4', startupName: 'Cohortly', startupSector: 'SaaS', startupStage: 'PRE_SEED', roundType: 'PRE_SEED', targetAmount: 25_000_000, currency: 'INR', minTicketSize: 2_500_000, maxTicketSize: 10_000_000, status: 'PAUSED', pitchDeckUrl: null, dataRoomUrl: null, openedAt: iso(60), closedAt: null, committedAmount: 6_000_000, softCommittedAmount: 0, indicatedAmount: 4_000_000, commitmentCount: 1 },
+    // Two closed rounds the signed-in firm backed, so both halves of the conversion step are
+    // visible: one already written into the portfolio, one still waiting to be.
+    { id: 'fc-5', startupId: 's-2', startupName: 'Ledgerly', startupSector: 'Fintech', startupStage: 'SERIES_A', roundType: 'SERIES_A', targetAmount: 250_000_000, currency: 'INR', minTicketSize: 25_000_000, maxTicketSize: 120_000_000, status: 'CLOSED', pitchDeckUrl: null, dataRoomUrl: null, openedAt: iso(610), closedAt: iso(540), committedAmount: 90_000_000, softCommittedAmount: 0, indicatedAmount: 0, commitmentCount: 1 },
+    { id: 'fc-6', startupId: 's-3', startupName: 'Freightwise', startupSector: 'Logistics', startupStage: 'SERIES_A', roundType: 'SERIES_A', targetAmount: 200_000_000, currency: 'INR', minTicketSize: 20_000_000, maxTicketSize: 80_000_000, status: 'CLOSED', pitchDeckUrl: null, dataRoomUrl: null, openedAt: iso(70), closedAt: iso(5), committedAmount: 50_000_000, softCommittedAmount: 0, indicatedAmount: 0, commitmentCount: 1 },
   ],
 
+  // `committedAt` is the date of each pledge's creation event below — the two have to agree, or
+  // the round detail page contradicts its own timeline.
   commitments: [
-    { id: 'c-1', fundingCycleId: 'fc-1', vcFirmId: 'f-1', vcFirmName: 'Meridian Ventures', amount: 25_000_000, currency: 'INR', status: 'SOFT_COMMITTED', committedAt: iso(18) },
-    { id: 'c-2', fundingCycleId: 'fc-1', vcFirmId: 'f-2', vcFirmName: 'Cascade Partners', amount: 15_000_000, currency: 'INR', status: 'COMMITTED', committedAt: iso(25) },
-    { id: 'c-3', fundingCycleId: 'fc-1', vcFirmId: 'f-3', vcFirmName: 'Ganges Capital', amount: 7_000_000, currency: 'INR', status: 'INDICATED', committedAt: iso(6) },
-    { id: 'c-4', fundingCycleId: 'fc-2', vcFirmId: 'f-2', vcFirmName: 'Cascade Partners', amount: 12_000_000, currency: 'INR', status: 'SOFT_COMMITTED', committedAt: iso(10) },
-    { id: 'c-5', fundingCycleId: 'fc-2', vcFirmId: 'f-4', vcFirmName: 'Northlight', amount: 6_000_000, currency: 'INR', status: 'INDICATED', committedAt: iso(4) },
+    { id: 'c-1', fundingCycleId: 'fc-1', vcFirmId: 'f-1', vcFirmName: 'Meridian Ventures', amount: 25_000_000, currency: 'INR', status: 'SOFT_COMMITTED', committedAt: iso(20), convertedInvestmentId: null },
+    { id: 'c-2', fundingCycleId: 'fc-1', vcFirmId: 'f-2', vcFirmName: 'Cascade Partners', amount: 15_000_000, currency: 'INR', status: 'COMMITTED', committedAt: iso(30), convertedInvestmentId: null },
+    { id: 'c-3', fundingCycleId: 'fc-1', vcFirmId: 'f-3', vcFirmName: 'Ganges Capital', amount: 7_000_000, currency: 'INR', status: 'INDICATED', committedAt: iso(6), convertedInvestmentId: null },
+    { id: 'c-11', fundingCycleId: 'fc-1', vcFirmId: 'f-4', vcFirmName: 'Northlight', amount: 20_000_000, currency: 'INR', status: 'COMMITTED', committedAt: iso(12), convertedInvestmentId: null },
+    { id: 'c-4', fundingCycleId: 'fc-2', vcFirmId: 'f-2', vcFirmName: 'Cascade Partners', amount: 12_000_000, currency: 'INR', status: 'SOFT_COMMITTED', committedAt: iso(10), convertedInvestmentId: null },
+    { id: 'c-5', fundingCycleId: 'fc-2', vcFirmId: 'f-4', vcFirmName: 'Northlight', amount: 6_000_000, currency: 'INR', status: 'INDICATED', committedAt: iso(4), convertedInvestmentId: null },
+    // The signed-in firm's own book — one pledge in each band, plus one it pulled out of, so the
+    // Commitments page and its filters have something honest to render.
+    { id: 'c-6', fundingCycleId: 'fc-3', vcFirmId: 'f-1', vcFirmName: 'Meridian Ventures', amount: 30_000_000, currency: 'INR', status: 'COMMITTED', committedAt: iso(32), convertedInvestmentId: null },
+    { id: 'c-7', fundingCycleId: 'fc-2', vcFirmId: 'f-1', vcFirmName: 'Meridian Ventures', amount: 9_000_000, currency: 'INR', status: 'INDICATED', committedAt: iso(9), convertedInvestmentId: null },
+    { id: 'c-8', fundingCycleId: 'fc-4', vcFirmId: 'f-1', vcFirmName: 'Meridian Ventures', amount: 8_000_000, currency: 'INR', status: 'WITHDRAWN', committedAt: iso(47), convertedInvestmentId: null },
+    // Already recorded: this pledge is investment i-4, the Ledgerly Series A in the portfolio.
+    // Still COMMITTED, because it is money that actually arrived.
+    { id: 'c-9', fundingCycleId: 'fc-5', vcFirmId: 'f-1', vcFirmName: 'Meridian Ventures', amount: 90_000_000, currency: 'INR', status: 'COMMITTED', committedAt: iso(590), convertedInvestmentId: 'i-4' },
+    // Waiting to be recorded: the round closed five days ago.
+    { id: 'c-10', fundingCycleId: 'fc-6', vcFirmId: 'f-1', vcFirmName: 'Meridian Ventures', amount: 50_000_000, currency: 'INR', status: 'COMMITTED', committedAt: iso(40), convertedInvestmentId: null },
+  ],
+
+  /**
+   * The append-only history behind the momentum chart and the round timeline.
+   *
+   * Replaying these has to land on the same bands the cycle reports, which is why the cycles above
+   * are recomputed from the commitments on startup: three sources for one number is two too many.
+   */
+  commitmentEvents: [
+    // fc-1, Lumen Health's seed — the round the founder sees charted on Insights.
+    { id: 'ce-1', commitmentId: 'c-2', vcFirmId: 'f-2', vcFirmName: 'Cascade Partners', fromStatus: null, toStatus: 'INDICATED', fromAmount: null, toAmount: 10_000_000, currency: 'INR', occurredAt: iso(30) },
+    { id: 'ce-2', commitmentId: 'c-2', vcFirmId: 'f-2', vcFirmName: 'Cascade Partners', fromStatus: 'INDICATED', toStatus: 'COMMITTED', fromAmount: 10_000_000, toAmount: 15_000_000, currency: 'INR', occurredAt: iso(25) },
+    { id: 'ce-3', commitmentId: 'c-1', vcFirmId: 'f-1', vcFirmName: 'Meridian Ventures', fromStatus: null, toStatus: 'INDICATED', fromAmount: null, toAmount: 25_000_000, currency: 'INR', occurredAt: iso(20) },
+    { id: 'ce-4', commitmentId: 'c-1', vcFirmId: 'f-1', vcFirmName: 'Meridian Ventures', fromStatus: 'INDICATED', toStatus: 'SOFT_COMMITTED', fromAmount: 25_000_000, toAmount: 25_000_000, currency: 'INR', occurredAt: iso(18) },
+    { id: 'ce-5', commitmentId: 'c-11', vcFirmId: 'f-4', vcFirmName: 'Northlight', fromStatus: null, toStatus: 'SOFT_COMMITTED', fromAmount: null, toAmount: 20_000_000, currency: 'INR', occurredAt: iso(12) },
+    { id: 'ce-6', commitmentId: 'c-11', vcFirmId: 'f-4', vcFirmName: 'Northlight', fromStatus: 'SOFT_COMMITTED', toStatus: 'COMMITTED', fromAmount: 20_000_000, toAmount: 20_000_000, currency: 'INR', occurredAt: iso(8) },
+    { id: 'ce-7', commitmentId: 'c-3', vcFirmId: 'f-3', vcFirmName: 'Ganges Capital', fromStatus: null, toStatus: 'INDICATED', fromAmount: null, toAmount: 7_000_000, currency: 'INR', occurredAt: iso(6) },
+    // fc-6, Freightwise's Series A — closed, and the pledge is still to be recorded.
+    { id: 'ce-8', commitmentId: 'c-10', vcFirmId: 'f-1', vcFirmName: 'Meridian Ventures', fromStatus: null, toStatus: 'SOFT_COMMITTED', fromAmount: null, toAmount: 40_000_000, currency: 'INR', occurredAt: iso(40) },
+    { id: 'ce-9', commitmentId: 'c-10', vcFirmId: 'f-1', vcFirmName: 'Meridian Ventures', fromStatus: 'SOFT_COMMITTED', toStatus: 'COMMITTED', fromAmount: 40_000_000, toAmount: 50_000_000, currency: 'INR', occurredAt: iso(22) },
+    // fc-4, Cohortly — the withdrawal, so the chart has a case where the stack drops.
+    { id: 'ce-10', commitmentId: 'c-8', vcFirmId: 'f-1', vcFirmName: 'Meridian Ventures', fromStatus: null, toStatus: 'SOFT_COMMITTED', fromAmount: null, toAmount: 8_000_000, currency: 'INR', occurredAt: iso(55) },
+    { id: 'ce-11', commitmentId: 'c-8', vcFirmId: 'f-1', vcFirmName: 'Meridian Ventures', fromStatus: 'SOFT_COMMITTED', toStatus: 'WITHDRAWN', fromAmount: 8_000_000, toAmount: 8_000_000, currency: 'INR', occurredAt: iso(47) },
   ],
 
   firms: [

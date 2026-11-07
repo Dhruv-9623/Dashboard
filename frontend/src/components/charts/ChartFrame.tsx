@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { cn } from '@/lib/utils'
@@ -32,7 +33,40 @@ export const ChartFrame = ({
   children,
   className,
   stale,
-}: ChartFrameProps) => (
+}: ChartFrameProps) => {
+  const plotRef = useRef<HTMLDivElement>(null)
+
+  /**
+   * Names the plot Recharts renders, and demotes its role.
+   *
+   * Recharts puts `tabindex="0"` and `role="application"` on its own `<svg>`. Both are wrong here:
+   * a focus stop must have an accessible name (WCAG 4.1.2) and it has none, and `application`
+   * tells a screen reader to stop interpreting keys and hand them to a widget that doesn't listen
+   * for any. It isn't ours to pass a prop to, so the fix is applied to the mounted node.
+   *
+   * Via an observer rather than on mount: `ResponsiveContainer` measures the box first and only
+   * then renders the svg, so on the first effect there is nothing to find — and it re-renders the
+   * svg on resize, which would drop the attributes again.
+   */
+  useEffect(() => {
+    const plot = plotRef.current
+    if (!plot) return
+
+    const label = `${title} — chart. The same values follow as a table.`
+    const apply = () => {
+      const surface = plot.querySelector('svg.recharts-surface')
+      if (!surface || surface.getAttribute('aria-label') === label) return
+      surface.setAttribute('role', 'img')
+      surface.setAttribute('aria-label', label)
+    }
+
+    apply()
+    const observer = new MutationObserver(apply)
+    observer.observe(plot, { childList: true, subtree: true })
+    return () => observer.disconnect()
+  }, [title])
+
+  return (
   <Card className={cn('flex flex-col', className)}>
     <CardHeader>
       <div className="min-w-0">
@@ -43,9 +77,20 @@ export const ChartFrame = ({
     </CardHeader>
     <CardContent className="flex-1 pb-3">
       {/* Held at reduced opacity while refetching: no skeleton flash, no layout jump. */}
-      <div className={cn('transition-opacity duration-200', stale && 'opacity-50')}>{children}</div>
+      <div
+        ref={plotRef}
+        className={cn('transition-opacity duration-200', stale && 'opacity-50')}
+      >
+        {children}
+      </div>
 
-      <table className="sr-only">
+      {/* The wrapper carries `sr-only`, not the table.
+          A table's used width is never less than its min-content width, so `sr-only`'s
+          `width: 1px` does nothing to a <table> — a chart whose rows are wordy then widens the
+          whole document and the page scrolls sideways on a phone. The wrapper is 1px with
+          `overflow: hidden`, which clips it properly. */}
+      <div className="sr-only">
+      <table>
         <caption>{title}</caption>
         <thead>
           <tr>
@@ -54,17 +99,21 @@ export const ChartFrame = ({
           </tr>
         </thead>
         <tbody>
-          {table.rows.map(([label, value]) => (
-            <tr key={label}>
+          {/* Keyed by position, not by label: a time series can legitimately have two points on
+              one day, and keying by the date made React drop one of them and warn. */}
+          {table.rows.map(([label, value], index) => (
+            <tr key={index}>
               <th scope="row">{label}</th>
               <td>{value}</td>
             </tr>
           ))}
         </tbody>
       </table>
+      </div>
     </CardContent>
   </Card>
-)
+  )
+}
 
 /** Shown in a chart's place when there isn't enough history to plot. */
 export const ChartEmpty = ({ message }: { message: string }) => (

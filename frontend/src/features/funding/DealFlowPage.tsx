@@ -1,11 +1,24 @@
 import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { fundingApi, fundingKeys } from './api'
-import { CommitmentStatus, commitmentStatusLabels, cycleStatusVariants, cycleStatusLabels } from './types'
+import {
+  commitmentStatusLabels,
+  cycleStatusLabels,
+  cycleStatusVariants,
+  CommitmentStatus,
+  LADDER_STATUSES,
+  ticketProblem,
+} from './types'
 import type { FundingCycleDTO } from './types'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyState } from '@/components/EmptyState'
+import { MeetingScene } from '@/components/illustrations/MeetingScene'
+import { Pagination } from '@/components/ui/Pagination'
+import { RoundProgress } from './RoundProgress'
+import { roundLabel } from '@/features/investments/types'
+
+/** The API sends the enum; people read "Series A", not SERIES_A. */
 import { ErrorState, errorMessage } from '@/components/ErrorState'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Button, buttonClass } from '@/components/ui/Button'
@@ -16,12 +29,18 @@ import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
 import { Modal } from '@/components/ui/Modal'
 import { Alert } from '@/components/ui/Alert'
-import { Progress } from '@/components/ui/Progress'
 import { SkeletonRows } from '@/components/ui/Skeleton'
 import { CoinsIcon } from '@/components/icons'
-import { CURRENCIES, formatMoney, sectorOptions, stageLabel, STAGES } from '@/lib/constants'
+import { CURRENCIES, formatMoney, pluralize, sectorOptions, stageLabel, STAGES } from '@/lib/constants'
 
-const commitOptions = Object.values(CommitmentStatus).map((status) => ({
+/**
+ * The bands a firm can pledge into — the ladder only.
+ *
+ * Built from `LADDER_STATUSES` rather than the whole enum, because WITHDRAWN is not a level of
+ * interest and offering it here invited a firm to open a pledge by withdrawing from a round it had
+ * never been part of.
+ */
+const commitOptions = LADDER_STATUSES.map((status) => ({
   value: status,
   label: commitmentStatusLabels[status],
 }))
@@ -38,11 +57,22 @@ const CommitModal = ({
   const [status, setStatus] = useState(CommitmentStatus.INDICATED)
   const queryClient = useQueryClient()
 
+  /** Null when the pledge would be accepted. Checked here so the form answers immediately. */
+  const problem = amount
+    ? ticketProblem(cycle, Number(amount), currency, formatMoney)
+    : null
+
   const mutation = useMutation({
+    // Reported in place, so it opts out of the global error toast.
+    meta: { errorToast: false },
     mutationFn: () =>
       fundingApi.commit(cycle.id, { amount: Number(amount), currency, status }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['funding-cycles'] })
+      // The pledge just made is a row on the firm's own book, and its totals change. Without
+      // this, committing from Deal Flow moved the round's progress bar and left Commitments
+      // showing the firm's previous position.
+      queryClient.invalidateQueries({ queryKey: ['commitments'] })
       onClose()
     },
   })
@@ -52,7 +82,7 @@ const CommitModal = ({
       open
       onClose={onClose}
       title={`Commit to ${cycle.startupName}`}
-      description={`${cycle.roundType} · target ${formatMoney(cycle.targetAmount, cycle.currency)}`}
+      description={`${roundLabel(cycle.roundType)} · target ${formatMoney(cycle.targetAmount, cycle.currency)}`}
       footer={
         <>
           <Button variant="outline" onClick={onClose} disabled={mutation.isPending}>
@@ -61,7 +91,7 @@ const CommitModal = ({
           <Button
             form="commit-form"
             type="submit"
-            disabled={!amount || mutation.isPending}
+            disabled={!amount || Boolean(problem) || mutation.isPending}
           >
             {mutation.isPending ? 'Submitting…' : 'Submit commitment'}
           </Button>
@@ -72,7 +102,7 @@ const CommitModal = ({
         id="commit-form"
         onSubmit={(event) => {
           event.preventDefault()
-          if (amount) mutation.mutate()
+          if (amount && !problem) mutation.mutate()
         }}
         className="space-y-4"
       >
@@ -102,11 +132,17 @@ const CommitModal = ({
           </div>
         </div>
 
-        {(cycle.minTicketSize || cycle.maxTicketSize) && (
-          <p className="text-xs text-ink-muted">
-            Ticket range: {formatMoney(cycle.minTicketSize, cycle.currency)} –{' '}
-            {formatMoney(cycle.maxTicketSize, cycle.currency)}
+        {problem ? (
+          <p role="alert" className="text-xs text-negative">
+            {problem}
           </p>
+        ) : (
+          (cycle.minTicketSize || cycle.maxTicketSize) && (
+            <p className="text-xs text-ink-muted">
+              Ticket range: {formatMoney(cycle.minTicketSize, cycle.currency)} –{' '}
+              {formatMoney(cycle.maxTicketSize, cycle.currency)}
+            </p>
+          )
         )}
 
         <div>
@@ -128,14 +164,30 @@ const CommitModal = ({
 export const DealFlowPage = () => {
   const [sector, setSector] = useState('')
   const [stage, setStage] = useState('')
+  const [page, setPage] = useState(0)
   const [committing, setCommitting] = useState<FundingCycleDTO | null>(null)
 
+  const params = {
+    sector: sector || undefined,
+    stage: stage || undefined,
+    page,
+    size: 20,
+  }
   const query = useQuery({
-    queryKey: fundingKeys.open(sector, stage),
-    queryFn: () => fundingApi.listOpen(sector || undefined, stage || undefined),
+    queryKey: fundingKeys.open(params),
+    queryFn: () => fundingApi.listOpen(params),
+    // Hold the previous page while the next one loads, rather than flashing a skeleton.
+    placeholderData: keepPreviousData,
   })
 
-  const cycles = query.data ?? []
+  const cycles = query.data?.items ?? []
+
+  // Changing a filter has to reset the page, or page 3 of "all sectors" becomes an empty page 3
+  // of "Fintech".
+  const changeFilter = (apply: () => void) => {
+    apply()
+    setPage(0)
+  }
 
   return (
     <>
@@ -150,7 +202,7 @@ export const DealFlowPage = () => {
             aria-label="Filter by sector"
             options={[{ value: '', label: 'All sectors' }, ...sectorOptions]}
             value={sector}
-            onChange={(event) => setSector(event.target.value)}
+            onChange={(event) => changeFilter(() => setSector(event.target.value))}
           />
         </div>
         <div className="w-48">
@@ -161,7 +213,7 @@ export const DealFlowPage = () => {
               ...STAGES.map((entry) => ({ value: entry.value, label: entry.label })),
             ]}
             value={stage}
-            onChange={(event) => setStage(event.target.value)}
+            onChange={(event) => changeFilter(() => setStage(event.target.value))}
           />
         </div>
       </div>
@@ -172,17 +224,14 @@ export const DealFlowPage = () => {
         <ErrorState error={query.error} onRetry={() => query.refetch()} />
       ) : cycles.length === 0 ? (
         <EmptyState
-          icon={<CoinsIcon className="h-6 w-6" />}
+          icon={<CoinsIcon className="size-6" />}
           title="No open rounds"
-          description="Nothing matches these filters right now. Try widening the sector or stage."
+          description="Nothing matches these filters right now. Widen the sector or stage, and founders raising in your thesis will show up here."
+          scene={<MeetingScene />}
         />
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {cycles.map((cycle) => {
-            const progress = cycle.targetAmount
-              ? (cycle.committedAmount / cycle.targetAmount) * 100
-              : 0
-
             return (
               <Card key={cycle.id}>
                 <CardContent className="py-5">
@@ -190,7 +239,7 @@ export const DealFlowPage = () => {
                     <div className="min-w-0">
                       <Link
                         to={`/startups/${cycle.startupId}`}
-                        className="text-base font-semibold text-ink hover:text-brand-ink hover:underline"
+                        className="link-target inline-block text-base font-semibold text-ink hover:text-brand-ink hover:underline"
                       >
                         {cycle.startupName}
                       </Link>
@@ -204,18 +253,18 @@ export const DealFlowPage = () => {
                   </div>
 
                   <div className="mt-4">
-                    <div className="flex items-baseline justify-between text-sm">
-                      <span className="font-medium text-ink">
-                        {formatMoney(cycle.committedAmount, cycle.currency)}
-                      </span>
-                      <span className="text-ink-muted">
-                        of {formatMoney(cycle.targetAmount, cycle.currency)}
-                      </span>
-                    </div>
-                    <Progress className="mt-2" value={progress} tone="green" />
+                    <RoundProgress cycle={cycle} compact />
                     <p className="mt-1.5 text-xs text-ink-muted">
-                      {cycle.roundType} · {cycle.commitmentCount} investor
-                      {cycle.commitmentCount === 1 ? '' : 's'} committed
+                      <Link
+                        to={`/rounds/${cycle.id}`}
+                        className="link-target inline-block hover:text-brand-ink hover:underline"
+                      >
+                        {roundLabel(cycle.roundType)}
+                      </Link>{' '}
+                      {/* "investors" not "investors committed": the count covers every band,
+                          so a round with only indications was claiming commitments it had none
+                          of — next to a ₹0 committed figure, which made it plainly wrong. */}
+                      · {pluralize(cycle.commitmentCount, 'investor')}
                     </p>
                   </div>
 
@@ -245,6 +294,17 @@ export const DealFlowPage = () => {
             )
           })}
         </div>
+      )}
+
+      {query.data && (
+        <Pagination
+          page={query.data.page}
+          totalPages={query.data.totalPages}
+          totalElements={query.data.totalElements}
+          size={query.data.size}
+          onPageChange={setPage}
+          label="open rounds"
+        />
       )}
 
       {committing && <CommitModal cycle={committing} onClose={() => setCommitting(null)} />}

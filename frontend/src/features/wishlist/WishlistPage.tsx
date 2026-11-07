@@ -65,7 +65,7 @@ export const WishlistPage = () => {
                     <div className="min-w-0 flex-1">
                       <Link
                         to={href}
-                        className="block truncate font-semibold text-ink hover:text-brand-ink hover:underline"
+                        className="link-target block truncate font-semibold text-ink hover:text-brand-ink hover:underline"
                       >
                         {item.targetName}
                       </Link>

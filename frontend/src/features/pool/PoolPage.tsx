@@ -74,6 +74,8 @@ const PoolEntryModal = ({
   const toast = useToast()
 
   const mutation = useMutation({
+    // Reported in place, so it opts out of the global error toast.
+    meta: { errorToast: false },
     mutationFn: () => {
       const payload: UpsertPoolEntryRequest = {
         startupId: offPlatform ? undefined : startup?.id,
@@ -259,6 +261,8 @@ export const PoolPage = () => {
   })
 
   const remove = useMutation({
+    // Shown inside the confirm dialog, so it opts out of the global error toast.
+    meta: { errorToast: false },
     mutationFn: (id: string) => poolApi.remove(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: poolKeys.all })

@@ -40,6 +40,8 @@ const CreateEventModal = ({ onClose }: { onClose: () => void }) => {
   const queryClient = useQueryClient()
 
   const mutation = useMutation({
+    // Reported in place, so it opts out of the global error toast.
+    meta: { errorToast: false },
     mutationFn: () =>
       eventApi.create({
         title: form.title.trim(),
@@ -285,7 +287,7 @@ export const EventsPage = () => {
                     href={safeUrl(event.virtualLink)}
                     target="_blank"
                     rel="noreferrer noopener"
-                    className="mt-3 inline-block text-sm text-brand-ink hover:underline"
+                    className="link-target mt-3 inline-block text-sm text-brand-ink hover:underline"
                   >
                     Join link
                   </a>

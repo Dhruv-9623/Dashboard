@@ -77,7 +77,7 @@ export const MultiSelect = ({ options, value, onChange, className }: MultiSelect
             className={cn(
               'rounded-full border px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2',
               selected
-                ? 'border-brand bg-brand text-white hover:bg-brand'
+                ? 'border-brand bg-brand text-ink-on-fill hover:bg-brand'
                 : 'border-field bg-surface text-ink-secondary hover:bg-surface-sunken'
             )}
           >

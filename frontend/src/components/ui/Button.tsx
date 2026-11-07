@@ -22,11 +22,11 @@ const variants: Record<ButtonVariant, string> = {
   // The inner top highlight is what separates a solid button from a coloured
   // rectangle; it reads as a raised surface at any size.
   primary:
-    'bg-brand text-white shadow-[inset_0_1px_0_0_rgb(255_255_255/0.16),var(--shadow-card)] hover:bg-brand-hover',
+    'bg-brand text-ink-on-fill shadow-[inset_0_1px_0_0_rgb(255_255_255/0.16),var(--shadow-card)] hover:bg-brand-hover',
   secondary: 'bg-surface-sunken text-ink border border-line hover:bg-surface-hover hover:border-line-strong',
   outline: 'border border-line-strong bg-surface text-ink shadow-card hover:bg-surface-hover',
   ghost: 'text-ink-secondary hover:bg-surface-hover hover:text-ink',
-  danger: 'bg-negative text-white hover:brightness-110',
+  danger: 'bg-negative text-ink-on-fill hover:brightness-110',
 }
 
 const sizes: Record<ButtonSize, string> = {

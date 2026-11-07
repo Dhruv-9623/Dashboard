@@ -1,22 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { XIcon } from '@/components/icons'
-
-type ToastTone = 'success' | 'error' | 'info'
-
-interface ToastAction {
-  label: string
-  onClick: () => void
-}
-
-interface ToastInput {
-  message: string
-  tone?: ToastTone
-  /** e.g. { label: 'Undo', onClick } for reversible actions. */
-  action?: ToastAction
-  /** Milliseconds; errors and toasts with an action stay longer by default. */
-  duration?: number
-}
+import { subscribeToToasts } from './toastBus'
+import type { ToastAction, ToastInput, ToastTone } from './toastBus'
 
 interface Toast extends Required<Pick<ToastInput, 'message' | 'tone'>> {
   id: number
@@ -110,6 +96,10 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
     }),
     [show]
   )
+
+  // Lets the query client's MutationCache report failures, which is how every
+  // mutation gets an error message without each call site wiring one up.
+  useEffect(() => subscribeToToasts(show), [show])
 
   return (
     <ToastContext.Provider value={api}>

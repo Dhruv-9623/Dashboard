@@ -12,9 +12,11 @@ import { chromium } from 'playwright'
 
 const BASE = process.env.APP_URL ?? 'http://localhost:3100'
 const pages = [
-  '/dashboard', '/insights', '/deal-flow', '/deal-triage', '/pool', '/outreach',
+  '/dashboard', '/insights', '/deal-flow', '/commitments', '/deal-triage', '/pool', '/outreach',
   '/investments', '/conflict-sentinel', '/pulse', '/discover', '/messages',
   '/wishlist', '/events', '/signals', '/suggestions', '/settings', '/compare',
+  // A round the signed-in firm has pledged into, so the detail page has something to show.
+  '/rounds/fc-1',
 ]
 
 const browser = await chromium.launch()

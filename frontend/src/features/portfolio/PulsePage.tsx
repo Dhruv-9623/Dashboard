@@ -56,6 +56,8 @@ export const PulsePage = () => {
   })
 
   const generate = useMutation({
+    // Reported in place, so it opts out of the global error toast.
+    meta: { errorToast: false },
     mutationFn: digestApi.generate,
     onSuccess: (digest) => {
       queryClient.invalidateQueries({ queryKey: portfolioKeys.digests })

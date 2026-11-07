@@ -33,6 +33,18 @@ public interface InvestmentRepository extends JpaRepository<Investment, UUID> {
             + "where i.vcFirm.id = :firmId group by i.status")
     List<StatusCount> countByStatus(@Param("firmId") UUID firmId);
 
+    /**
+     * How many companies the firm still holds, as opposed to how many cheques it has written.
+     *
+     * <p>A follow-on round is a second position in the same company, not a second holding. Counting
+     * rows made "Active holdings" climb every time a firm recorded another cheque into a company it
+     * already owned — which the funding feature's conversion step now does routinely.
+     */
+    @Query("select count(distinct i.startup.id) from Investment i "
+            + "where i.vcFirm.id = :firmId and i.status = :status")
+    long countDistinctCompaniesByStatus(@Param("firmId") UUID firmId,
+                                        @Param("status") InvestmentStatus status);
+
     interface CurrencyTotal {
         String getCurrency();
 

@@ -15,6 +15,7 @@ import { suggestionApi, suggestionKeys } from '@/features/ai-suggestions/api'
 import { SuggestionStatus } from '@/features/ai-suggestions/types'
 import { eventApi, eventKeys } from '@/features/events/api'
 import { rsvpLabels } from '@/features/events/types'
+import { roundLabel } from '@/features/investments/types'
 import { PageHeader } from '@/components/PageHeader'
 import { ErrorState } from '@/components/ErrorState'
 import { MetricCard } from '@/components/MetricCard'
@@ -109,7 +110,7 @@ const UpcomingEvents = () => {
     <Card>
       <CardHeader>
         <CardTitle>Upcoming events</CardTitle>
-        <Link to="/events" className="text-[13px] font-medium text-brand-ink hover:underline">
+        <Link to="/events" className="link-target text-[13px] font-medium text-brand-ink hover:underline">
           View all
         </Link>
       </CardHeader>
@@ -228,7 +229,9 @@ const VCDashboard = () => {
   const loading = investments.isLoading || pool.isLoading
 
   const deployed = summary?.totalsByCurrency ?? {}
-  const holdings = summary?.activeCount ?? 0
+  // Companies held, not cheques written — the card is labelled "holdings".
+  const holdings = summary?.activeCompanyCount ?? 0
+  const positions = summary?.activeCount ?? 0
   const tracked = pool.data?.totalElements ?? 0
 
   // Derived series. A single currency per chart: adding rupees to dollars would
@@ -322,7 +325,13 @@ const VCDashboard = () => {
           <MetricCard
             label="Active holdings"
             count={{ to: holdings, format: (value) => String(Math.round(value)) }}
-            hint={holdings === 0 ? 'Record your first position' : 'Positions still held'}
+            hint={
+              holdings === 0
+                ? 'Record your first position'
+                : holdings === positions
+                  ? 'Companies still held'
+                  : `${pluralize(positions, 'position')} still held`
+            }
             accent="var(--viz-2)"
           />
           <MetricCard
@@ -511,7 +520,7 @@ const StartupDashboard = () => {
             ? `${formatMoney(open.committedAmount, open.currency)} committed of ${formatMoney(
                 open.targetAmount,
                 open.currency
-              )} on your open ${open.roundType} round.`
+              )} on your open ${roundLabel(open.roundType)} round.`
             : 'No round open right now — open one to start taking commitments.'
         }
         facts={[
@@ -544,7 +553,7 @@ const StartupDashboard = () => {
           />
           <MetricCard
             label="Current round"
-            value={open?.roundType ?? '—'}
+            value={roundLabel(open?.roundType)}
             hint={open ? 'Open to investors' : 'No round open'}
             accent="var(--viz-1)"
           />
@@ -566,7 +575,7 @@ const StartupDashboard = () => {
       {open && (
         <div className="mt-4 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
           <AllocationBar
-            title={`${open.roundType} progress`}
+            title={`${roundLabel(open.roundType)} progress`}
             description={`${formatMoney(open.committedAmount, open.currency)} committed of ${formatMoney(
               open.targetAmount,
               open.currency
@@ -575,7 +584,9 @@ const StartupDashboard = () => {
               {
                 label: 'Committed',
                 value: open.committedAmount,
-                formatted: `${Math.round(progress)}%`,
+                // The money, not the percentage: AllocationBar already prints each
+                // segment's share in its own column, so a percentage here showed twice.
+                formatted: formatMoney(open.committedAmount, open.currency),
                 color: 'var(--viz-2)',
               },
               {

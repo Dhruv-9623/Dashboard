@@ -116,7 +116,7 @@ export const CompanyBreakdown = ({
                 <div className="flex items-center gap-2">
                   <Link
                     to={`/startups/${company.id}`}
-                    className="truncate text-[13px] font-medium text-ink hover:text-brand-ink hover:underline"
+                    className="link-target truncate text-[13px] font-medium text-ink hover:text-brand-ink hover:underline"
                   >
                     {company.name}
                   </Link>

@@ -70,6 +70,8 @@ export const OpportunityDetailPage = () => {
   }
 
   const decide = useMutation({
+    // Reported in place, so it opts out of the global error toast.
+    meta: { errorToast: false },
     mutationFn: (status: OpportunityStatus) =>
       opportunityApi.decide(id, { status, decisionNote: note.trim() || undefined }),
     onSuccess: invalidate,
@@ -81,6 +83,8 @@ export const OpportunityDetailPage = () => {
   })
 
   const runConflict = useMutation({
+    // Reported in place, so it opts out of the global error toast.
+    meta: { errorToast: false },
     mutationFn: () => conflictApi.run(id),
     onSuccess: (report) => queryClient.setQueryData(conflictKeys.forOpportunity(id), report),
   })

@@ -11,6 +11,8 @@ export const useWishlistToggle = (targetType: WishlistTargetType) => {
   const wishlist = useQuery({ queryKey: wishlistKeys.all, queryFn: wishlistApi.list })
 
   const toggle = useMutation({
+    // Reported in place, so it opts out of the global error toast.
+    meta: { errorToast: false },
     mutationFn: async (targetId: string) => {
       const existing = (wishlist.data ?? []).find((item) => item.targetId === targetId)
       return existing

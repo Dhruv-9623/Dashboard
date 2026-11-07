@@ -60,6 +60,8 @@ export const InvestmentForm = ({ open, onClose, investment }: InvestmentFormProp
   const toast = useToast()
 
   const mutation = useMutation({
+    // Reported in place, so it opts out of the global error toast.
+    meta: { errorToast: false },
     mutationFn: () => {
       const payload: UpsertInvestmentRequest = {
         startupId: startup?.id ?? '',

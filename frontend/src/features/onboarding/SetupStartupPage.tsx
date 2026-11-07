@@ -35,6 +35,8 @@ export const SetupStartupPage = () => {
   })
 
   const mutation = useMutation({
+    // Reported in place, so it opts out of the global error toast.
+    meta: { errorToast: false },
     mutationFn: () =>
       startupApi.create({
         name: form.name.trim(),

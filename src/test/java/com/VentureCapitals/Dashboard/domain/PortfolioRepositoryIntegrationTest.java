@@ -88,6 +88,33 @@ class PortfolioRepositoryIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void active_holdings_count_companies_not_cheques() {
+        VCFirm firm = firmWithMember();
+        VCFirm otherFirm = firmWithMember();
+        Startup lumen = startup("Lumen", "Healthtech", StartupStage.SEED);
+        Startup freightwise = startup("Freightwise", "Logistics", StartupStage.SERIES_A);
+
+        // Two cheques into Lumen — a seed and a follow-on — plus one into Freightwise.
+        invest(firm, lumen, 60_000_000, "INR", InvestmentStatus.ACTIVE);
+        invest(firm, lumen, 90_000_000, "INR", InvestmentStatus.ACTIVE);
+        invest(firm, freightwise, 50_000_000, "INR", InvestmentStatus.ACTIVE);
+        // An exit doesn't count as a holding, and another firm's position is none of ours.
+        invest(firm, startup("Sundial", "Climate", StartupStage.SEED), 1_000, "INR", InvestmentStatus.EXITED);
+        invest(otherFirm, lumen, 999, "INR", InvestmentStatus.ACTIVE);
+
+        long positions = investmentRepository.countByStatus(firm.getId()).stream()
+                .filter(row -> row.getStatus() == InvestmentStatus.ACTIVE)
+                .mapToLong(InvestmentRepository.StatusCount::getCount)
+                .sum();
+
+        // Three active positions, two companies. Reporting positions under the label "holdings"
+        // made the figure climb every time a follow-on was recorded — which conversion now does.
+        assertThat(positions).isEqualTo(3);
+        assertThat(investmentRepository
+                .countDistinctCompaniesByStatus(firm.getId(), InvestmentStatus.ACTIVE)).isEqualTo(2);
+    }
+
+    @Test
     void startup_search_filters_by_name_sector_and_stage() {
         startup("Lumen Health", "Healthtech", StartupStage.SEED);
         startup("Ledgerly", "Fintech", StartupStage.SERIES_A);

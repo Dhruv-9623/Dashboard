@@ -1,5 +1,13 @@
 package com.VentureCapitals.Dashboard.config;
 
+import com.VentureCapitals.Dashboard.domain.funding.CommitmentEvent;
+import com.VentureCapitals.Dashboard.domain.funding.CommitmentEventRepository;
+import com.VentureCapitals.Dashboard.domain.funding.CommitmentStatus;
+import com.VentureCapitals.Dashboard.domain.funding.FundingCommitment;
+import com.VentureCapitals.Dashboard.domain.funding.FundingCommitmentRepository;
+import com.VentureCapitals.Dashboard.domain.funding.FundingCycle;
+import com.VentureCapitals.Dashboard.domain.funding.FundingCycleRepository;
+import com.VentureCapitals.Dashboard.domain.funding.FundingCycleStatus;
 import com.VentureCapitals.Dashboard.domain.investment.Investment;
 import com.VentureCapitals.Dashboard.domain.investment.InvestmentRepository;
 import com.VentureCapitals.Dashboard.domain.investment.InvestmentRound;
@@ -32,6 +40,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -65,6 +74,9 @@ public class DemoDataSeeder implements ApplicationRunner {
     private final StartupMemberRepository startupMembers;
     private final InvestmentRepository investments;
     private final PoolEntryRepository poolEntries;
+    private final FundingCycleRepository fundingCycles;
+    private final FundingCommitmentRepository commitments;
+    private final CommitmentEventRepository events;
     private final PasswordEncoder passwordEncoder;
 
     @Value("${app.demo.password:Password123!}")
@@ -124,6 +136,55 @@ public class DemoDataSeeder implements ApplicationRunner {
                 List.of("climate", "off-platform"),
                 "Battery analytics, not on the platform yet. Met at the Bengaluru demo day."));
 
+        // An open round with commitments at all three levels, so the progress ladder on the
+        // founder's dashboard has something to show and deal flow isn't empty for the VC.
+        FundingCycle round = fundingCycles.save(FundingCycle.builder()
+                .startup(ledgerly)
+                .roundType(InvestmentRound.SERIES_A)
+                .targetAmount(250_000_000L)
+                .currency("INR")
+                .minTicketSize(10_000_000L)
+                .maxTicketSize(100_000_000L)
+                .status(FundingCycleStatus.OPEN)
+                .pitchDeckUrl("https://ledgerly.example.com/deck")
+                .openedAt(Instant.now().minus(Duration.ofDays(38)))
+                .build());
+
+        // Three different firms, because one firm gets one commitment per round — the demo has to
+        // obey the same rule the API enforces, or it isn't demonstrating the product.
+        VCFirm kestrel = coInvestor("Kestrel Capital", "Mumbai");
+        VCFirm bayHarbour = coInvestor("Bay Harbour Partners", "Singapore");
+
+        FundingCommitment ours = commitments.save(commitment(round, firm, 60_000_000L, CommitmentStatus.COMMITTED, 21));
+        FundingCommitment theirs = commitments.save(commitment(round, kestrel, 40_000_000L, CommitmentStatus.SOFT_COMMITTED, 12));
+        FundingCommitment indication = commitments.save(commitment(round, bayHarbour, 25_000_000L, CommitmentStatus.INDICATED, 4));
+
+        // The history behind those three pledges.
+        //
+        // Seeded rather than derived, because the momentum chart reads the event log and nothing
+        // else — without this the demo shows a round with ₹1.25 Cr on it and an empty chart, which
+        // looks like the feature is broken rather than like a round nobody has moved on.
+        //
+        // Replaying these lands on exactly the bands above: Meridian ₹6 Cr committed, Kestrel
+        // ₹4 Cr soft, Bay Harbour ₹2.5 Cr indicated.
+        events.save(event(ours, null, null, CommitmentStatus.INDICATED, 30_000_000L, 30));
+        events.save(event(ours, CommitmentStatus.INDICATED, 30_000_000L, CommitmentStatus.SOFT_COMMITTED, 60_000_000L, 26));
+        events.save(event(ours, CommitmentStatus.SOFT_COMMITTED, 60_000_000L, CommitmentStatus.COMMITTED, 60_000_000L, 21));
+        events.save(event(theirs, null, null, CommitmentStatus.INDICATED, 40_000_000L, 18));
+        events.save(event(theirs, CommitmentStatus.INDICATED, 40_000_000L, CommitmentStatus.SOFT_COMMITTED, 40_000_000L, 12));
+        events.save(event(indication, null, null, CommitmentStatus.INDICATED, 25_000_000L, 4));
+
+        // A closed round in the history, so the founder's page isn't a single row.
+        fundingCycles.save(FundingCycle.builder()
+                .startup(ledgerly)
+                .roundType(InvestmentRound.SEED)
+                .targetAmount(45_000_000L)
+                .currency("INR")
+                .status(FundingCycleStatus.CLOSED)
+                .openedAt(Instant.now().minus(Duration.ofDays(420)))
+                .closedAt(Instant.now().minus(Duration.ofDays(300)))
+                .build());
+
         log.info("""
                 Demo data seeded.
                   VC:      owner{0}, pm{0}, staff{0}   (firm: Meridian Ventures)
@@ -174,6 +235,43 @@ public class DemoDataSeeder implements ApplicationRunner {
                 .vcFirm(firm).startup(startup)
                 .investmentDate(date).amount(amount).currency("INR")
                 .round(round).equityPercentage(equity).status(status).notes(notes)
+                .build();
+    }
+
+    /** A firm that exists to be a name on someone else's cap table, with no members of its own. */
+    private VCFirm coInvestor(String name, String location) {
+        return firms.save(VCFirm.builder()
+                .name(name)
+                .description("Co-investor on the Ledgerly round.")
+                .sectors(new ArrayList<>(List.of("Logistics")))
+                .location(location)
+                .investmentStage("Series A")
+                .build());
+    }
+
+    private FundingCommitment commitment(FundingCycle round, VCFirm firm, long amount,
+                                         CommitmentStatus status, int daysAgo) {
+        return FundingCommitment.builder()
+                .fundingCycle(round).vcFirm(firm).amount(amount).currency(round.getCurrency())
+                .status(status).committedAt(Instant.now().minus(Duration.ofDays(daysAgo)))
+                .build();
+    }
+
+    /**
+     * One move in a seeded round's history. No actor: nobody made these, and the co-investor firms
+     * deliberately have no members to attribute them to.
+     */
+    private CommitmentEvent event(FundingCommitment commitment,
+                                  CommitmentStatus fromStatus, Long fromAmount,
+                                  CommitmentStatus toStatus, long toAmount, int daysAgo) {
+        return CommitmentEvent.builder()
+                .commitment(commitment)
+                .fundingCycle(commitment.getFundingCycle())
+                .vcFirm(commitment.getVcFirm())
+                .fromStatus(fromStatus).fromAmount(fromAmount)
+                .toStatus(toStatus).toAmount(toAmount)
+                .currency(commitment.getCurrency())
+                .occurredAt(Instant.now().minus(Duration.ofDays(daysAgo)))
                 .build();
     }
 

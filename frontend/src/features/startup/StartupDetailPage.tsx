@@ -74,7 +74,7 @@ export const StartupDetailPage = () => {
                       href={safeUrl(startup.website)}
                       target="_blank"
                       rel="noreferrer noopener"
-                      className="mt-2 inline-block text-sm text-brand-ink hover:underline"
+                      className="link-target mt-2 inline-block text-sm text-brand-ink hover:underline"
                     >
                       {startup.website}
                     </a>
