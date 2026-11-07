@@ -233,6 +233,7 @@ const VCDashboard = () => {
   // ledger, not here — counting an exited company's cheque as deployed put ₹9.30 Cr next to a
   // two-company holding count that only came to ₹8.50 Cr.
   const deployed = summary?.activeTotalsByCurrency ?? {}
+  const deployed = summary?.totalsByCurrency ?? {}
   // Companies held, not cheques written — the card is labelled "holdings".
   const holdings = summary?.activeCompanyCount ?? 0
   const positions = summary?.activeCount ?? 0
@@ -594,6 +595,30 @@ const StartupDashboard = () => {
               <RoundProgress cycle={open} percent />
             </CardContent>
           </Card>
+          <AllocationBar
+            title={`${roundLabel(open.roundType)} progress`}
+            description={`${formatMoney(open.committedAmount, open.currency)} committed of ${formatMoney(
+              open.targetAmount,
+              open.currency
+            )}`}
+            segments={[
+              {
+                label: 'Committed',
+                value: open.committedAmount,
+                // The money, not the percentage: AllocationBar already prints each
+                // segment's share in its own column, so a percentage here showed twice.
+                formatted: formatMoney(open.committedAmount, open.currency),
+                color: 'var(--viz-2)',
+              },
+              {
+                label: 'Remaining',
+                value: Math.max(open.targetAmount - open.committedAmount, 0),
+                formatted: formatMoney(Math.max(open.targetAmount - open.committedAmount, 0), open.currency),
+                color: 'var(--line-strong)',
+              },
+            ]}
+            emptyMessage="No commitments yet."
+          />
           <Inbound />
         </div>
       )}

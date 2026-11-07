@@ -14,6 +14,7 @@
 # Pass DB_NAME and the run deletes its own records on the way out. Without it the fixtures stay
 # in the database and show up in Discover as "Harbourline 1793533577" and friends, which is how
 # they first turned up during manual testing.
+#   API_URL=http://localhost:8081 scripts/funding-smoke-test.sh
 #
 # Exits non-zero if any check fails.
 set -uo pipefail
@@ -48,6 +49,7 @@ SQL
   echo "Cleaned this run's records from $DB_NAME."
 }
 trap cleanup EXIT
+trap 'rm -rf "$D"' EXIT
 
 if [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$B/api/auth/me")" = 000 ]; then
   echo "No backend answering at $B — start it first (see scripts/dev-up.sh)." >&2

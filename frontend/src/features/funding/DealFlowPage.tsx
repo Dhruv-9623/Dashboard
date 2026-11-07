@@ -12,6 +12,10 @@ import {
   ticketProblem,
 } from './types'
 import type { FundingCommitmentDTO, FundingCycleDTO } from './types'
+  LADDER_STATUSES,
+  ticketProblem,
+} from './types'
+import type { FundingCycleDTO } from './types'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyState } from '@/components/EmptyState'
 import { MeetingScene } from '@/components/illustrations/MeetingScene'
@@ -92,6 +96,7 @@ const CommitModal = ({
       open
       onClose={onClose}
       title={existing ? `Update your pledge to ${cycle.startupName}` : `Commit to ${cycle.startupName}`}
+      title={`Commit to ${cycle.startupName}`}
       description={`${roundLabel(cycle.roundType)} · target ${formatMoney(cycle.targetAmount, cycle.currency)}`}
       footer={
         <>
@@ -218,6 +223,8 @@ export const DealFlowPage = () => {
   const pledgeByCycle = new Map(
     (book.data?.items ?? []).filter(isLive).map((pledge) => [pledge.fundingCycleId, pledge])
   )
+
+  })
 
   const cycles = query.data?.items ?? []
 
@@ -366,6 +373,7 @@ export const DealFlowPage = () => {
           onClose={() => setCommitting(null)}
         />
       )}
+      {committing && <CommitModal cycle={committing} onClose={() => setCommitting(null)} />}
     </>
   )
 }

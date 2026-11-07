@@ -89,6 +89,9 @@ public class FundingService {
     public Page<FundingCycle> listOpen(String sector, StartupStage stage, UUID startupId, Pageable pageable) {
         String normalisedSector = (sector == null || sector.isBlank()) ? null : sector.trim();
         return cycleRepository.findOpen(normalisedSector, stage, startupId, pageable);
+    public Page<FundingCycle> listOpen(String sector, StartupStage stage, Pageable pageable) {
+        String normalisedSector = (sector == null || sector.isBlank()) ? null : sector.trim();
+        return cycleRepository.findOpen(normalisedSector, stage, pageable);
     }
 
     /** The internal lookup. Applies no visibility rules — callers that serve the API use

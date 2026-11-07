@@ -35,6 +35,7 @@ export const errorMessage = (error: unknown, fallback = 'Something went wrong.')
     if (error.status === 404) {
       return looksLikeRoute(error.message) ? MISSING_MESSAGE : error.message || MISSING_MESSAGE
     }
+    if (error.status === 404) return error.message || 'That item no longer exists.'
     // status 0 is the client-side network/timeout case, which already carries a
     // written-for-humans message from api-client.
     return error.message || fallback

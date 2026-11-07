@@ -143,6 +143,7 @@ class FundingApiWebTest {
         FundingCycle cycle = cycle();
         // The null is the optional startupId filter — deal flow asks for every startup's round.
         when(fundingService.listOpen(eq("Fintech"), eq(StartupStage.SEED), isNull(), any()))
+        when(fundingService.listOpen(eq("Fintech"), eq(StartupStage.SEED), any()))
                 .thenReturn(new PageImpl<>(List.of(cycle), PageRequest.of(0, 20), 1));
         when(fundingService.totalsFor(anyList())).thenReturn(Map.of(cycle.getId(), CycleTotals.EMPTY));
 

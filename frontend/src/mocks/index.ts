@@ -332,6 +332,7 @@ const routes: Array<[string, RegExp, Handler]> = [
           (!sector || c.startupSector === sector) &&
           (!stage || c.startupStage === stage) &&
           (!startupId || c.startupId === startupId)
+          (!stage || c.startupStage === stage)
       ),
       url
     )
@@ -370,6 +371,13 @@ const routes: Array<[string, RegExp, Handler]> = [
     if (cycle.status !== 'OPEN') return refuse("This round isn't open for commitments.")
     if (body.currency !== cycle.currency) {
       return refuse(`This round is raising in ${cycle.currency}.`)
+    }
+    if (cycle.minTicketSize !== null && body.amount < cycle.minTicketSize) {
+      return refuse(`This round's minimum ticket is ${cycle.minTicketSize} ${cycle.currency}.`)
+    }
+    if (cycle.maxTicketSize !== null && body.amount > cycle.maxTicketSize) {
+      return refuse(`This round's maximum ticket is ${cycle.maxTicketSize} ${cycle.currency}.`)
+    }
     }
     if (cycle.minTicketSize !== null && body.amount < cycle.minTicketSize) {
       return refuse(`This round's minimum ticket is ${cycle.minTicketSize} ${cycle.currency}.`)

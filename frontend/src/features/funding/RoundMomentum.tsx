@@ -118,6 +118,7 @@ const MomentumTooltip = ({
   return (
     <div className="pointer-events-none min-w-44 rounded-lg border border-line bg-surface px-3 py-2 shadow-overlay">
       <p className="label-micro">{when}</p>
+      <p className="label-micro">{typeof label === 'string' ? formatDate(label) : label}</p>
       <div className="mt-1 space-y-1">
         {rows.map((row) => (
           <div key={row.key} className="flex items-center gap-2">
@@ -177,6 +178,10 @@ export const RoundMomentum = ({ cycle, events, height = 220 }: RoundMomentumProp
   const lastPoint = data.length > 0 ? data[data.length - 1].t : from
   const to = lastPoint > from ? lastPoint : from + 86_400_000
   const xTicks = timeTicks(from, to, formatTick)
+  const data = roundFillSeries(events, cycle.openedAt)
+  const animate = !reducedMotion()
+
+  const peak = Math.max(...data.map((point) => point.pledged), cycle.targetAmount, 1)
 
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -192,6 +197,11 @@ export const RoundMomentum = ({ cycle, events, height = 220 }: RoundMomentumProp
           axisLine={false}
           tick={{ fill: 'var(--ink-muted)', fontSize: 11 }}
           tickFormatter={formatTick}
+          dataKey="at"
+          tickLine={false}
+          axisLine={false}
+          tick={{ fill: 'var(--ink-muted)', fontSize: 11 }}
+          tickFormatter={(value: string) => formatDate(value)}
           minTickGap={24}
           dy={6}
         />
@@ -199,6 +209,7 @@ export const RoundMomentum = ({ cycle, events, height = 220 }: RoundMomentumProp
           width={44}
           domain={[0, yMax]}
           ticks={yTicks}
+          domain={[0, peak]}
           tickLine={false}
           axisLine={false}
           tick={{ fill: 'var(--ink-muted)', fontSize: 11 }}

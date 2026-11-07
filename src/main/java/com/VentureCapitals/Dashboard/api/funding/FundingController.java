@@ -70,6 +70,7 @@ public class FundingController {
 
         Page<FundingCycle> cycles = fundingService.listOpen(
                 sector, stage, startupId, PageResponse.pageable(page, size, Sort.by(Sort.Direction.DESC, "openedAt")));
+                sector, stage, PageResponse.pageable(page, size, Sort.by(Sort.Direction.DESC, "openedAt")));
         Map<UUID, CycleTotals> totals = fundingService.totalsFor(cycles.getContent());
 
         return ResponseEntity.ok(ApiResponse.ok(PageResponse.from(cycles,

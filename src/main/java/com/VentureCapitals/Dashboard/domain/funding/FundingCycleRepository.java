@@ -12,6 +12,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface FundingCycleRepository extends JpaRepository<FundingCycle, UUID> {
@@ -66,4 +68,8 @@ public interface FundingCycleRepository extends JpaRepository<FundingCycle, UUID
              where cycle.status = com.VentureCapitals.Dashboard.domain.funding.FundingCycleStatus.OPEN
             """)
     Set<UUID> findAllRaising();
+            """)
+    Page<FundingCycle> findOpen(@Param("sector") String sector,
+                                @Param("stage") StartupStage stage,
+                                Pageable pageable);
 }
