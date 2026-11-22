@@ -15,7 +15,7 @@ import {
   sectorExposure,
   sparkValues,
 } from '@/features/investments/portfolioSeries'
-import { InvestmentRound } from '@/features/investments/types'
+import { InvestmentRound, InvestmentStatus } from '@/features/investments/types'
 import { fundingApi, fundingKeys } from '@/features/funding/api'
 import { FundingCycleStatus } from '@/features/funding/types'
 import { RoundMomentum, roundFillTable } from '@/features/funding/RoundMomentum'
@@ -47,7 +47,10 @@ export const InsightsPage = () => {
   const isStartup = user?.userType === UserType.STARTUP
   const { filters, setFilter, clear, activeCount } = useInsightsFilters()
 
-  const query = useQuery({ queryKey: insightsKeys.all, queryFn: insightsApi.get })
+  const query = useQuery({
+    queryKey: insightsKeys.all,
+    queryFn: insightsApi.get,
+  })
 
   // VC only: the records behind the derived charts. Founders don't have a
   // portfolio, so the page falls back to the server's own analytics for them.
@@ -110,7 +113,10 @@ export const InsightsPage = () => {
 
   const deployment = useMemo(() => cumulativeDeployed(records, currency), [records, currency])
   const pace = useMemo(() => dealsPerQuarter(records), [records])
-  const sectors = useMemo(() => sectorExposure(records, currency), [records, currency])
+  const sectors = useMemo(
+    () => sectorExposure(records, currency, filters.status === InvestmentStatus.EXITED),
+    [records, currency, filters.status]
+  )
   const rounds = useMemo(
     () => roundExposure(records, currency, Object.values(InvestmentRound)),
     [records, currency]
@@ -204,7 +210,10 @@ export const InsightsPage = () => {
   if (query.isLoading) {
     return (
       <>
-        <PageHeader title="Insights" description="Engagement and funnel metrics for your profile." />
+        <PageHeader
+          title="Insights"
+          description="Engagement and funnel metrics for your profile."
+        />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, index) => (
             <Skeleton key={index} className="h-[104px]" />
@@ -272,7 +281,10 @@ export const InsightsPage = () => {
       <div ref={metrics} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           label="Profile views"
-          count={{ to: data.profileViews, format: (value) => String(Math.round(value)) }}
+          count={{
+            to: data.profileViews,
+            format: (value) => String(Math.round(value)),
+          }}
           hint="All time"
           accent="var(--viz-1)"
         />
@@ -287,13 +299,19 @@ export const InsightsPage = () => {
         />
         <MetricCard
           label="Active conversations"
-          count={{ to: data.activeConversations, format: (value) => String(Math.round(value)) }}
+          count={{
+            to: data.activeConversations,
+            format: (value) => String(Math.round(value)),
+          }}
           hint="Open threads"
           accent="var(--viz-3)"
         />
         <MetricCard
           label="Wishlisted by"
-          count={{ to: data.wishlistedByCount, format: (value) => String(Math.round(value)) }}
+          count={{
+            to: data.wishlistedByCount,
+            format: (value) => String(Math.round(value)),
+          }}
           hint={isStartup ? 'Investors watching you' : 'Founders watching you'}
           accent="var(--viz-5)"
         />
@@ -340,30 +358,36 @@ export const InsightsPage = () => {
             rows: data.funnel.map((stage) => [stage.label, String(stage.count)]),
           }}
         >
-          {data.funnel.length > 1 ? (
+          {data.funnel.some((stage) => stage.count > 0) ? (
             <FunnelChart stages={data.funnel} />
           ) : (
-            <ChartEmpty message="The funnel fills in as people view your profile and reach out." />
+            <ChartEmpty message="No activity yet. The funnel fills in as people view your profile and reach out." />
           )}
         </ChartFrame>
 
         <ChartFrame
-          title={isStartup ? 'Commitments by sector' : 'Portfolio by sector'}
+          title={isStartup ? 'Backers by investor focus' : 'Portfolio by sector'}
           description={
             isStartup
-              ? `Capital by sector in ${data.currency}, across everything on record.`
+              ? `Signed capital in ${data.currency}, grouped by the sector each backing investor focuses on.`
               : `Capital by sector in ${currency}, for the slice selected above.`
           }
           stale={!isStartup && ledger.isFetching && !ledger.isLoading}
           table={{
-            columns: ['Sector', `Capital (${isStartup ? data.currency : currency})`],
+            columns: [
+              isStartup ? 'Investor focus' : 'Sector',
+              `Capital (${isStartup ? data.currency : currency})`,
+            ],
             rows: (isStartup
               ? data.sectorBreakdown.map((entry) => ({
                   label: entry.sector,
                   value: entry.amount,
                 }))
               : sectors
-            ).map((entry) => [entry.label, formatMoney(entry.value, isStartup ? data.currency : currency)]),
+            ).map((entry) => [
+              entry.label,
+              formatMoney(entry.value, isStartup ? data.currency : currency),
+            ]),
           }}
         >
           {isStartup ? (
@@ -383,7 +407,7 @@ export const InsightsPage = () => {
                 format={(value) => formatMoney(value, data.currency)}
               />
             ) : (
-              <ChartEmpty message="Sector mix appears once there are commitments to compare." />
+              <ChartEmpty message="Appears once an investor signs a commitment." />
             )
           ) : sectors.length > 0 ? (
             <RankedBars items={sectors} format={money} />
@@ -473,10 +497,7 @@ export const InsightsPage = () => {
               stale={ledger.isFetching && !ledger.isLoading}
               table={{
                 columns: ['Sector', `Deals · capital (${currency})`],
-                rows: sectorShape.map((point) => [
-                  point.label,
-                  `${point.x} · ${money(point.y)}`,
-                ]),
+                rows: sectorShape.map((point) => [point.label, `${point.x} · ${money(point.y)}`]),
               }}
             >
               {sectorShape.length > 0 ? (
@@ -504,10 +525,7 @@ export const InsightsPage = () => {
             stale={ledger.isFetching && !ledger.isLoading}
             table={{
               columns: ['Round', `Capital (${currency})`],
-              rows: rounds.map((round) => [
-                roundLabel(round.label),
-                money(round.value),
-              ]),
+              rows: rounds.map((round) => [roundLabel(round.label), money(round.value)]),
             }}
           >
             {rounds.length > 0 ? (
@@ -559,7 +577,11 @@ export const InsightsPage = () => {
           aside={
             records.length > 0 ? (
               <span className="label-micro tabular">
-                {pluralize(new Set(records.map((record) => record.startupId)).size, 'company', 'companies')}
+                {pluralize(
+                  new Set(records.map((record) => record.startupId)).size,
+                  'company',
+                  'companies'
+                )}
               </span>
             ) : undefined
           }
@@ -586,7 +608,10 @@ export const InsightsPage = () => {
         />
         <MetricCard
           label={isStartup ? 'Committed investors' : 'Portfolio companies'}
-          count={{ to: data.entityCount, format: (value) => String(Math.round(value)) }}
+          count={{
+            to: data.entityCount,
+            format: (value) => String(Math.round(value)),
+          }}
           accent="var(--viz-4)"
         />
       </div>

@@ -1,5 +1,7 @@
 package com.VentureCapitals.Dashboard.api.vc;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.VentureCapitals.Dashboard.domain.vc.PlanTier;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -23,6 +25,15 @@ public class VCFirmDTO {
     private List<String> sectors;
     private String location;
     private Integer foundedYear;
+    /**
+     * The next two are the firm's own business, so they are left out of the response altogether
+     * for anyone who isn't a member — absent rather than null, which a client could mistake for
+     * "this firm has no thesis".
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private PlanTier planTier;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private ThesisDTO thesis;
     private Instant createdAt;
     private Instant updatedAt;
 }

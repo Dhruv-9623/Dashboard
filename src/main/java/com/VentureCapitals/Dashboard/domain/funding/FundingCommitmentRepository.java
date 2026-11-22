@@ -47,7 +47,42 @@ public interface FundingCommitmentRepository extends JpaRepository<FundingCommit
                                          @Param("status") CommitmentStatus status,
                                          Pageable pageable);
 
-    @EntityGraph(attributePaths = {"vcFirm", "fundingCycle", "convertedInvestment"},
+    // fundingCycle.startup is in the graph because every write response is mapped with the round
+    // it belongs to (see FundingMapper.toBookDTO), after the service transaction has closed.
+    /**
+     * Everything pledged to a startup across all its rounds, withdrawn pledges excluded — the
+     * founder's own view of their cap table in progress, with the investing firm loaded.
+     */
+    @Query("""
+            select c from FundingCommitment c join fetch c.vcFirm join c.fundingCycle fc
+             where fc.startup.id = :startupId
+               and c.status <> com.VentureCapitals.Dashboard.domain.funding.CommitmentStatus.WITHDRAWN
+            """)
+    List<FundingCommitment> findLiveForStartup(@Param("startupId") UUID startupId);
+
+    /** Live (non-withdrawn) pledges on the OPEN rounds of these startups, firm loaded. */
+    @Query("""
+            select c from FundingCommitment c join fetch c.fundingCycle fc
+             where fc.startup.id in :startupIds
+               and fc.status = com.VentureCapitals.Dashboard.domain.funding.FundingCycleStatus.OPEN
+               and c.status <> com.VentureCapitals.Dashboard.domain.funding.CommitmentStatus.WITHDRAWN
+            """)
+    List<FundingCommitment> findLiveOnOpenRounds(@Param("startupIds") java.util.Collection<UUID> startupIds);
+
+    /**
+     * Signed pledges on rounds that have closed and haven't been written into the portfolio yet —
+     * money the firm has promised and not recorded, which a digest should not let slip.
+     */
+    @Query("""
+            select c from FundingCommitment c join fetch c.fundingCycle fc join fetch fc.startup
+             where c.vcFirm.id = :firmId
+               and c.status = com.VentureCapitals.Dashboard.domain.funding.CommitmentStatus.COMMITTED
+               and c.convertedInvestment is null
+               and fc.status = com.VentureCapitals.Dashboard.domain.funding.FundingCycleStatus.CLOSED
+            """)
+    List<FundingCommitment> findUnrecordedClosedPledges(@Param("firmId") UUID firmId);
+
+    @EntityGraph(attributePaths = {"vcFirm", "fundingCycle", "fundingCycle.startup", "convertedInvestment"},
             type = EntityGraph.EntityGraphType.LOAD)
     Optional<FundingCommitment> findWithCycleById(UUID id);
 

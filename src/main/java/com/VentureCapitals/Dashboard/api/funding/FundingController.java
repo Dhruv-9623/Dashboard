@@ -70,7 +70,6 @@ public class FundingController {
 
         Page<FundingCycle> cycles = fundingService.listOpen(
                 sector, stage, startupId, PageResponse.pageable(page, size, Sort.by(Sort.Direction.DESC, "openedAt")));
-                sector, stage, PageResponse.pageable(page, size, Sort.by(Sort.Direction.DESC, "openedAt")));
         Map<UUID, CycleTotals> totals = fundingService.totalsFor(cycles.getContent());
 
         return ResponseEntity.ok(ApiResponse.ok(PageResponse.from(cycles,
@@ -152,7 +151,7 @@ public class FundingController {
             @Valid @RequestBody CommitmentRequest request) {
 
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.ok(FundingMapper.toDTO(fundingService.commit(user, id, request))));
+                .body(ApiResponse.ok(FundingMapper.toBookDTO(fundingService.commit(user, id, request))));
     }
 
     private List<FundingCycleDTO> toDTOs(List<FundingCycle> cycles) {

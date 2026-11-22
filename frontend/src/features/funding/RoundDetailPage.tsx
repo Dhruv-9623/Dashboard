@@ -265,11 +265,6 @@ export const RoundDetailPage = () => {
                   ) : (
                     'No limits'
                   )
-                  cycle.minTicketSize || cycle.maxTicketSize
-                    ? `${cycle.minTicketSize ? formatMoney(cycle.minTicketSize, cycle.currency) : 'any'} – ${
-                        cycle.maxTicketSize ? formatMoney(cycle.maxTicketSize, cycle.currency) : 'any'
-                      }`
-                    : 'No limits'
                 }
               />
             </CardContent>

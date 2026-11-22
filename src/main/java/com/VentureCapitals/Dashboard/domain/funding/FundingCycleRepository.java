@@ -12,8 +12,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 public interface FundingCycleRepository extends JpaRepository<FundingCycle, UUID> {
@@ -62,14 +60,25 @@ public interface FundingCycleRepository extends JpaRepository<FundingCycle, UUID
             """)
     Set<UUID> findRaisingAmong(@Param("startupIds") Collection<UUID> startupIds);
 
+    /** The open rounds among these companies, with the company loaded — for the portfolio digest. */
+    @Query("""
+            select cycle from FundingCycle cycle join fetch cycle.startup
+             where cycle.status = com.VentureCapitals.Dashboard.domain.funding.FundingCycleStatus.OPEN
+               and cycle.startup.id in :startupIds
+            """)
+    List<FundingCycle> findOpenAmong(@Param("startupIds") Collection<UUID> startupIds);
+
+    /** Every open round with its company — what an investor's suggestions are matched against. */
+    @Query("""
+            select cycle from FundingCycle cycle join fetch cycle.startup
+             where cycle.status = com.VentureCapitals.Dashboard.domain.funding.FundingCycleStatus.OPEN
+            """)
+    List<FundingCycle> findAllOpen();
+
     /** Every startup with a round open, for the "raising now" filter on discovery. */
     @Query("""
             select cycle.startup.id from FundingCycle cycle
              where cycle.status = com.VentureCapitals.Dashboard.domain.funding.FundingCycleStatus.OPEN
             """)
     Set<UUID> findAllRaising();
-            """)
-    Page<FundingCycle> findOpen(@Param("sector") String sector,
-                                @Param("stage") StartupStage stage,
-                                Pageable pageable);
 }

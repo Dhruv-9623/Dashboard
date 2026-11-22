@@ -68,9 +68,9 @@ public class StartupController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<StartupDTO>> getStartup(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<StartupDTO>> getStartup(@CurrentUser User user, @PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.ok(
-                startupMapper.toDTO(startupService.getStartup(id), startupService.isRaising(id))));
+                startupMapper.toDTO(startupService.viewStartup(user, id), startupService.isRaising(id))));
     }
 
     @PostMapping

@@ -85,6 +85,24 @@ class DemoDataSeederTest extends PostgresContainerTest {
     private CommitmentEventRepository events;
     @Autowired
     private PasswordEncoder passwordEncoder;
+    @Autowired
+    private com.VentureCapitals.Dashboard.domain.vc.VCFirmThesisRepository theses;
+    @Autowired
+    private com.VentureCapitals.Dashboard.domain.opportunity.OpportunityRepository opportunities;
+    @Autowired
+    private com.VentureCapitals.Dashboard.domain.conflict.ConflictReportRepository conflictReports;
+    @Autowired
+    private com.VentureCapitals.Dashboard.domain.digest.DigestRepository digests;
+    @Autowired
+    private com.VentureCapitals.Dashboard.domain.signals.SignalRepository signals;
+    @Autowired
+    private com.VentureCapitals.Dashboard.domain.messaging.ConnectionRequestRepository connectionRequests;
+    @Autowired
+    private com.VentureCapitals.Dashboard.domain.messaging.ConversationRepository conversations;
+    @Autowired
+    private com.VentureCapitals.Dashboard.domain.events.EventRepository platformEvents;
+    @Autowired
+    private com.VentureCapitals.Dashboard.domain.suggestion.AISuggestionRepository suggestions;
 
     @Test
     void seeding_produces_accounts_that_can_actually_sign_in() {
@@ -109,7 +127,6 @@ class DemoDataSeederTest extends PostgresContainerTest {
         // Two, not three: an exited position is not a tracked prospect, so ClinicOS is an
         // investment only. The pool holds Vaultline and the off-platform Nimbus Grid.
         assertThat(poolEntries.count()).isEqualTo(2);
-        assertThat(poolEntries.count()).isEqualTo(3);
         assertThat(fundingCycles.count()).isEqualTo(2);
         assertThat(commitments.count()).isEqualTo(3);
     }
@@ -170,5 +187,40 @@ class DemoDataSeederTest extends PostgresContainerTest {
 
         assertThat(users.count()).isEqualTo(usersBefore);
         assertThat(firms.count()).isEqualTo(firmsBefore);
+    }
+
+    @Test
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    void the_triage_screens_open_on_scored_opportunities_and_a_conflict_report() {
+        assertThat(theses.count()).isEqualTo(1);
+        var all = opportunities.findAll();
+        assertThat(all).hasSize(3);
+        // Scored by the real engine against the seeded thesis, not hand-typed numbers.
+        assertThat(all).allSatisfy(o -> assertThat(o.getFitScore()).isNotNull());
+        assertThat(all).extracting(o -> o.getStatus().name()).contains("APPROVED", "PENDING_REVIEW");
+
+        var report = conflictReports.findAll();
+        assertThat(report).hasSize(1);
+        assertThat(report.get(0).getOpportunity().getCompanyName()).isEqualTo("Pocketly");
+        // Pocketly reads like Ledgerly, which is the point of seeding it.
+        assertThat(report.get(0).getOverallConfidence().doubleValue()).isPositive();
+    }
+
+    @Test
+    void messaging_has_one_open_chat_and_one_request_waiting() {
+        assertThat(connectionRequests.count()).isEqualTo(2);
+        assertThat(conversations.count()).isEqualTo(1);
+        assertThat(connectionRequests.findAll()).extracting(r -> r.getStatus().name())
+                .containsExactlyInAnyOrder("ACCEPTED", "PENDING");
+    }
+
+    @Test
+    void news_events_digest_and_suggestions_are_there_to_look_at() {
+        assertThat(signals.count()).isEqualTo(6);
+        assertThat(platformEvents.count()).isEqualTo(3);
+        assertThat(digests.count()).isEqualTo(1);
+        // One shortlist for the investor and one for the founder.
+        assertThat(suggestions.findAll()).extracting(sg -> sg.getSuggestionType().name())
+                .contains("STARTUP_FOR_VC", "VC_FOR_STARTUP");
     }
 }

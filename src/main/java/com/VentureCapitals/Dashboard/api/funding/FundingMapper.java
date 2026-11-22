@@ -65,6 +65,11 @@ public final class FundingMapper {
     /**
      * A commitment seen from the firm's own book, where the round is what identifies the row.
      *
+     * <p>Also the shape of every write response (pledge, move, convert). Those used to be mapped
+     * with {@link #toDTO(FundingCommitment)}, which carries no round context, so a client that
+     * updated its cache from the response got {@code null} for the startup, round type, round
+     * status and target — and had to refetch to draw the row it had just changed.
+     *
      * <p>Requires the {@code fundingCycle.startup} graph to be loaded — see
      * {@code FundingCommitmentRepository.findFirmBook}.
      */
@@ -75,6 +80,7 @@ public final class FundingMapper {
                 .id(commitment.getId())
                 .fundingCycleId(cycle.getId())
                 .vcFirmId(commitment.getVcFirm().getId())
+                .vcFirmName(commitment.getVcFirm().getName())
                 .amount(commitment.getAmount())
                 .currency(commitment.getCurrency())
                 .status(commitment.getStatus())

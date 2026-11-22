@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { fundingApi, fundingKeys } from './api'
 import {
-  CommitmentStatus,
   FundingCycleStatus,
   commitmentStatusLabels,
   commitmentStatusVariants,
@@ -239,26 +238,19 @@ const CycleModal = ({
   )
 }
 
+/**
+ * Who has pledged to a round, as the founder sees it — read-only.
+ *
+ * There used to be a "Move to" column with Soft commit / Confirm buttons. The server only lets the
+ * firm that made a pledge change it (a founder talking an investor's indication up into a
+ * commitment would put words in their mouth), so every one of those buttons returned 403 on the
+ * real API. The mock accepted them, which is the only reason they ever looked like they worked.
+ * Investors move their own pledges from Commitments and Deal Flow.
+ */
 const Commitments = ({ cycleId }: { cycleId: string }) => {
-  const queryClient = useQueryClient()
-
   const query = useQuery({
     queryKey: fundingKeys.commitments(cycleId),
     queryFn: () => fundingApi.listCommitments(cycleId),
-  })
-
-  const update = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: CommitmentStatus }) =>
-      fundingApi.updateCommitment(id, status),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: fundingKeys.commitments(cycleId) })
-      // The bands and the investor count live on the round, not on the commitment, so promoting
-      // a pledge has to refetch the round as well. Without this the cards and the progress bar
-      // kept the old figures until something else happened to invalidate them — saving the Edit
-      // dialog, which is why it looked like only Edit worked.
-      queryClient.invalidateQueries({ queryKey: fundingKeys.mine })
-      queryClient.invalidateQueries({ queryKey: fundingKeys.history(cycleId) })
-    },
   })
 
   const commitments = query.data ?? []
@@ -276,7 +268,6 @@ const Commitments = ({ cycleId }: { cycleId: string }) => {
           <TableHead>Amount</TableHead>
           <TableHead>Status</TableHead>
           <TableHead>Date</TableHead>
-          <TableHead className="text-right">Move to</TableHead>
         </tr>
       </TableHeader>
       <TableBody>
@@ -293,26 +284,6 @@ const Commitments = ({ cycleId }: { cycleId: string }) => {
             </TableCell>
             <TableCell className="text-sm text-ink-secondary">
               {formatDate(commitment.committedAt)}
-            </TableCell>
-            <TableCell className="text-right">
-              {commitment.status !== CommitmentStatus.COMMITTED && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() =>
-                    update.mutate({
-                      id: commitment.id,
-                      status:
-                        commitment.status === CommitmentStatus.INDICATED
-                          ? CommitmentStatus.SOFT_COMMITTED
-                          : CommitmentStatus.COMMITTED,
-                    })
-                  }
-                  disabled={update.isPending}
-                >
-                  {commitment.status === CommitmentStatus.INDICATED ? 'Soft commit' : 'Confirm'}
-                </Button>
-              )}
             </TableCell>
           </TableRow>
         ))}

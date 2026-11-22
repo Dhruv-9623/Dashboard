@@ -51,7 +51,12 @@ export const FunnelChart = ({ stages, className }: FunnelChartProps) => {
       {stages.map((stage, index) => {
         const previous = index > 0 ? stages[index - 1] : null
         // Conversion from the previous stage, which is the number people act on.
-        const conversion = previous && previous.count > 0 ? stage.count / previous.count : null
+        // Only when the stage is a subset of the one above. A stage that counts a different thing
+        // (pledges after accepted connections) can be larger, and "300% continue" means nothing.
+        const conversion =
+          previous && previous.count > 0 && stage.count <= previous.count
+            ? stage.count / previous.count
+            : null
         const width = Math.max((stage.count / top) * 100, 2)
         // Roughly the room a stage name needs before it would be clipped.
         const inside = width > 38

@@ -131,6 +131,7 @@ export const formatDate = (iso: string | null | undefined) => {
 export const formatDateTime = (iso: string | null | undefined) => {
   if (!iso) return '—'
   return new Date(iso).toLocaleString(undefined, {
+    year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: 'numeric',

@@ -73,7 +73,7 @@ const ConnectionRequests = () => {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium text-ink">{other.displayName}</span>
-                      {other.entityName && (
+                      {other.entityName && other.entityName !== other.displayName && (
                         <span className="text-sm text-ink-muted">· {other.entityName}</span>
                       )}
                       <Badge variant={connectionStatusVariants[request.status]}>
@@ -93,7 +93,10 @@ const ConnectionRequests = () => {
                       <Button
                         size="sm"
                         onClick={() =>
-                          respond.mutate({ id: request.id, status: ConnectionStatus.ACCEPTED })
+                          respond.mutate({
+                            id: request.id,
+                            status: ConnectionStatus.ACCEPTED,
+                          })
                         }
                         disabled={respond.isPending}
                       >
@@ -104,7 +107,10 @@ const ConnectionRequests = () => {
                         size="sm"
                         variant="outline"
                         onClick={() =>
-                          respond.mutate({ id: request.id, status: ConnectionStatus.REJECTED })
+                          respond.mutate({
+                            id: request.id,
+                            status: ConnectionStatus.REJECTED,
+                          })
                         }
                         disabled={respond.isPending}
                       >
@@ -141,7 +147,9 @@ const Thread = ({ conversation }: { conversation: ConversationDTO }) => {
     mutationFn: (body: string) => messagingApi.sendMessage(conversation.id, body),
     onSuccess: () => {
       setDraft('')
-      queryClient.invalidateQueries({ queryKey: messagingKeys.messages(conversation.id) })
+      queryClient.invalidateQueries({
+        queryKey: messagingKeys.messages(conversation.id),
+      })
       queryClient.invalidateQueries({ queryKey: messagingKeys.conversations })
     },
   })
@@ -158,7 +166,11 @@ const Thread = ({ conversation }: { conversation: ConversationDTO }) => {
     if (!hasUnread || !query.isSuccess) return
     messagingApi
       .markRead(conversation.id)
-      .then(() => queryClient.invalidateQueries({ queryKey: messagingKeys.conversations }))
+      .then(() =>
+        queryClient.invalidateQueries({
+          queryKey: messagingKeys.conversations,
+        })
+      )
       .catch(() => {
         // Non-critical: the badge simply stays until the next successful attempt.
       })
@@ -167,16 +179,21 @@ const Thread = ({ conversation }: { conversation: ConversationDTO }) => {
   return (
     <Card className="flex h-[32rem] flex-col">
       <div className="flex items-center gap-3 border-b border-line px-5 py-3">
-        <Avatar name={conversation.counterparty.displayName} logoUrl={conversation.counterparty.logoUrl} size="sm" />
+        <Avatar
+          name={conversation.counterparty.displayName}
+          logoUrl={conversation.counterparty.logoUrl}
+          size="sm"
+        />
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-ink">
             {conversation.counterparty.displayName}
           </p>
-          {conversation.counterparty.entityName && (
-            <p className="truncate text-xs text-ink-muted">
-              {conversation.counterparty.entityName}
-            </p>
-          )}
+          {conversation.counterparty.entityName &&
+            conversation.counterparty.entityName !== conversation.counterparty.displayName && (
+              <p className="truncate text-xs text-ink-muted">
+                {conversation.counterparty.entityName}
+              </p>
+            )}
         </div>
       </div>
 
@@ -190,9 +207,7 @@ const Thread = ({ conversation }: { conversation: ConversationDTO }) => {
             onRetry={() => query.refetch()}
           />
         ) : messages.length === 0 ? (
-          <p className="py-8 text-center text-sm text-ink-muted">
-            No messages yet — say hello.
-          </p>
+          <p className="py-8 text-center text-sm text-ink-muted">No messages yet — say hello.</p>
         ) : (
           messages.map((message) => {
             const mine = message.senderUserId === user?.id
@@ -206,7 +221,14 @@ const Thread = ({ conversation }: { conversation: ConversationDTO }) => {
                   )}
                 >
                   <p className="whitespace-pre-wrap text-sm">{message.body}</p>
-                  <p className={cn('mt-1 text-xs', mine ? 'text-[color-mix(in_oklab,var(--ink-on-fill)_88%,var(--brand))]' : 'text-ink-secondary')}>
+                  <p
+                    className={cn(
+                      'mt-1 text-xs',
+                      mine
+                        ? 'text-[color-mix(in_oklab,var(--ink-on-fill)_88%,var(--brand))]'
+                        : 'text-ink-secondary'
+                    )}
+                  >
                     {formatDateTime(message.sentAt)}
                   </p>
                 </div>
@@ -218,7 +240,10 @@ const Thread = ({ conversation }: { conversation: ConversationDTO }) => {
       </div>
 
       {send.isError && (
-        <p role="alert" className="border-t border-[color-mix(in_oklab,var(--negative)_25%,transparent)] bg-negative-subtle px-5 py-2 text-sm text-negative">
+        <p
+          role="alert"
+          className="border-t border-[color-mix(in_oklab,var(--negative)_25%,transparent)] bg-negative-subtle px-5 py-2 text-sm text-negative"
+        >
           Message not sent: {errorMessage(send.error)}
         </p>
       )}
@@ -301,9 +326,7 @@ const Conversations = () => {
                       </p>
                     )}
                   </div>
-                  {conversation.unreadCount > 0 && (
-                    <Badge>{conversation.unreadCount}</Badge>
-                  )}
+                  {conversation.unreadCount > 0 && <Badge>{conversation.unreadCount}</Badge>}
                 </button>
               </li>
             ))}

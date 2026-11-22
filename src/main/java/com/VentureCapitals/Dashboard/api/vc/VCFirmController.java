@@ -4,6 +4,8 @@ import com.VentureCapitals.Dashboard.common.ApiResponse;
 import com.VentureCapitals.Dashboard.domain.user.User;
 import com.VentureCapitals.Dashboard.domain.vc.AddMemberRequest;
 import com.VentureCapitals.Dashboard.domain.vc.CreateVCFirmRequest;
+import com.VentureCapitals.Dashboard.domain.vc.SelectPlanRequest;
+import com.VentureCapitals.Dashboard.domain.vc.UpdateThesisRequest;
 import com.VentureCapitals.Dashboard.domain.vc.UpdateVCFirmRequest;
 import com.VentureCapitals.Dashboard.domain.vc.VCFirm;
 import com.VentureCapitals.Dashboard.domain.vc.VCFirmService;
@@ -47,7 +49,7 @@ public class VCFirmController {
             @Valid @RequestBody CreateVCFirmRequest request) {
 
         VCFirm firm = vcFirmService.createFirm(user, request);
-        VCFirmDTO firmDTO = vcFirmMapper.toDTO(firm);
+        VCFirmDTO firmDTO = vcFirmMapper.toDTO(vcFirmService.ownProfile(firm));
 
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(firmDTO));
     }
@@ -57,7 +59,7 @@ public class VCFirmController {
     @PreAuthorize("hasRole('VC')")
     public ResponseEntity<ApiResponse<VCFirmDTO>> getMyFirm(@CurrentUser User user) {
         VCFirmDTO firmDTO = vcFirmService.findFirmForUser(user.getId())
-                .map(vcFirmMapper::toDTO)
+                .map(firm -> vcFirmMapper.toDTO(vcFirmService.ownProfile(firm)))
                 .orElse(null);
         return ResponseEntity.ok(ApiResponse.ok(firmDTO));
     }
@@ -74,8 +76,9 @@ public class VCFirmController {
 
     /** Public firm profile, readable by any signed-in user. Members and editing stay restricted. */
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<VCFirmDTO>> getFirm(@PathVariable UUID id) {
-        VCFirmDTO firmDTO = vcFirmMapper.toDTO(vcFirmService.getFirm(id));
+    public ResponseEntity<ApiResponse<VCFirmDTO>> getFirm(@CurrentUser User user, @PathVariable UUID id) {
+        // Counts the visit when the reader is an outsider, and hides the thesis and plan from them.
+        VCFirmDTO firmDTO = vcFirmMapper.toDTO(vcFirmService.viewFirm(user, id));
         return ResponseEntity.ok(ApiResponse.ok(firmDTO));
     }
 
@@ -87,9 +90,30 @@ public class VCFirmController {
             @Valid @RequestBody UpdateVCFirmRequest request) {
 
         VCFirm firm = vcFirmService.updateFirm(id, user, request);
-        VCFirmDTO firmDTO = vcFirmMapper.toDTO(firm);
+        VCFirmDTO firmDTO = vcFirmMapper.toDTO(vcFirmService.ownProfile(firm));
 
         return ResponseEntity.ok(ApiResponse.ok(firmDTO));
+    }
+
+    /** Replaces the firm's thesis. Owner only; the response is the thesis as saved. */
+    @PutMapping("/{id}/thesis")
+    @PreAuthorize("hasRole('VC')")
+    public ResponseEntity<ApiResponse<ThesisDTO>> updateThesis(
+            @CurrentUser User user,
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateThesisRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(vcFirmMapper.toDTO(vcFirmService.updateThesis(id, user, request))));
+    }
+
+    /** Records the plan choice. Owner only. Nothing is billed yet. */
+    @PutMapping("/{id}/plan")
+    @PreAuthorize("hasRole('VC')")
+    public ResponseEntity<ApiResponse<VCFirmDTO>> selectPlan(
+            @CurrentUser User user,
+            @PathVariable UUID id,
+            @Valid @RequestBody SelectPlanRequest request) {
+        VCFirm firm = vcFirmService.selectPlan(id, user, request.getPlanTier());
+        return ResponseEntity.ok(ApiResponse.ok(vcFirmMapper.toDTO(vcFirmService.ownProfile(firm))));
     }
 
     @GetMapping("/{id}/members")

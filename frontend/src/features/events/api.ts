@@ -19,6 +19,8 @@ export const eventApi = {
       body: JSON.stringify({ rsvpStatus }),
     }),
 
+  remove: (id: string) => fetchApi<void>(`/api/events/${id}`, { method: 'DELETE' }),
+
   listAttendees: (id: string) => fetchApi<EventAttendeeDTO[]>(`/api/events/${id}/attendees`),
 }
 

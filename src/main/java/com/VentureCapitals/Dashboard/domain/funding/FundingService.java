@@ -1,11 +1,14 @@
 package com.VentureCapitals.Dashboard.domain.funding;
 
+import com.VentureCapitals.Dashboard.common.MoneyFormat;
 import com.VentureCapitals.Dashboard.common.exception.BusinessRuleViolationException;
 import com.VentureCapitals.Dashboard.common.exception.EntityNotFoundException;
 import com.VentureCapitals.Dashboard.common.exception.UnauthorizedException;
+import com.VentureCapitals.Dashboard.common.exception.ValidationException;
 import com.VentureCapitals.Dashboard.domain.investment.Investment;
 import com.VentureCapitals.Dashboard.domain.investment.InvestmentRequest;
 import com.VentureCapitals.Dashboard.domain.investment.InvestmentService;
+import com.VentureCapitals.Dashboard.domain.signals.SignalService;
 import com.VentureCapitals.Dashboard.domain.startup.Startup;
 import com.VentureCapitals.Dashboard.domain.startup.StartupMember;
 import com.VentureCapitals.Dashboard.domain.startup.StartupMemberRepository;
@@ -62,19 +65,22 @@ public class FundingService {
     private final StartupMemberRepository startupMemberRepository;
     private final FirmAccessPolicy firmAccessPolicy;
     private final InvestmentService investmentService;
+    private final SignalService signalService;
 
     public FundingService(FundingCycleRepository cycleRepository,
                           FundingCommitmentRepository commitmentRepository,
                           CommitmentEventRepository eventRepository,
                           StartupMemberRepository startupMemberRepository,
                           FirmAccessPolicy firmAccessPolicy,
-                          InvestmentService investmentService) {
+                          InvestmentService investmentService,
+                          SignalService signalService) {
         this.cycleRepository = cycleRepository;
         this.commitmentRepository = commitmentRepository;
         this.eventRepository = eventRepository;
         this.startupMemberRepository = startupMemberRepository;
         this.firmAccessPolicy = firmAccessPolicy;
         this.investmentService = investmentService;
+        this.signalService = signalService;
     }
 
     // --- Rounds -----------------------------------------------------------------------------
@@ -89,9 +95,6 @@ public class FundingService {
     public Page<FundingCycle> listOpen(String sector, StartupStage stage, UUID startupId, Pageable pageable) {
         String normalisedSector = (sector == null || sector.isBlank()) ? null : sector.trim();
         return cycleRepository.findOpen(normalisedSector, stage, startupId, pageable);
-    public Page<FundingCycle> listOpen(String sector, StartupStage stage, Pageable pageable) {
-        String normalisedSector = (sector == null || sector.isBlank()) ? null : sector.trim();
-        return cycleRepository.findOpen(normalisedSector, stage, pageable);
     }
 
     /** The internal lookup. Applies no visibility rules — callers that serve the API use
@@ -157,6 +160,9 @@ public class FundingService {
 
         FundingCycle saved = cycleRepository.save(cycle);
         log.info("Funding round opened: startupId={}, cycleId={}", startup.getId(), saved.getId());
+        if (saved.getStatus() == FundingCycleStatus.OPEN) {
+            signalService.recordRoundOpened(saved);
+        }
         return saved;
     }
 
@@ -193,9 +199,14 @@ public class FundingService {
         cycle.setMaxTicketSize(request.getMaxTicketSize());
         cycle.setPitchDeckUrl(blankToNull(request.getPitchDeckUrl()));
         cycle.setDataRoomUrl(blankToNull(request.getDataRoomUrl()));
+        boolean reopened = request.getStatus() == FundingCycleStatus.OPEN && cycle.getStatus() != FundingCycleStatus.OPEN;
         applyStatus(cycle, request.getStatus());
 
-        return cycleRepository.save(cycle);
+        FundingCycle saved = cycleRepository.save(cycle);
+        if (reopened) {
+            signalService.recordRoundOpened(saved);
+        }
+        return saved;
     }
 
     /** closedAt belongs to the server: it marks when the round actually shut, not what a client sent. */
@@ -301,13 +312,20 @@ public class FundingService {
         VCMember membership = firmAccessPolicy.requireAnyMembership(actor);
         firmAccessPolicy.require(actor, membership.getFirm().getId(), FirmAccessPolicy.INVESTMENT_EDITORS);
 
+        // Withdrawing is a move on a pledge that exists, made through PATCH. Accepting it here let a
+        // firm open a pledge by withdrawing from a round it had never joined, and — because this
+        // endpoint replaces the firm's existing pledge — wipe a signed commitment in one call.
+        if (request.getStatus() == CommitmentStatus.WITHDRAWN) {
+            throw new ValidationException(
+                    "To withdraw a pledge, use the withdraw action on it. A new pledge starts as indicated, soft or committed.");
+        }
+
         FundingCycle cycle = getCycle(cycleId);
         if (cycle.getStatus() != FundingCycleStatus.OPEN) {
             throw new BusinessRuleViolationException("This round isn't open for commitments.");
         }
         if (!cycle.getCurrency().equals(request.getCurrency())) {
-            throw new BusinessRuleViolationException(
-                    "This round is raising in " + cycle.getCurrency() + ".");
+            throw new ValidationException("This round is raising in " + cycle.getCurrency() + ".");
         }
         validateTicket(cycle, request.getAmount());
 
@@ -322,6 +340,14 @@ public class FundingService {
         CommitmentStatus previousStatus = existing.map(FundingCommitment::getStatus).orElse(null);
         Long previousAmount = existing.map(FundingCommitment::getAmount).orElse(null);
 
+        // A signed pledge is money the founder is planning around. Re-posting it as an indication,
+        // or at a smaller figure, would quietly take that away — and the only trace would be a step
+        // on a chart. Backing out is allowed, but as a withdrawal, which is explicit and shows up as
+        // one. Raising the figure or staying put is fine.
+        if (previousStatus == CommitmentStatus.COMMITTED) {
+            guardSignedPledge(request.getStatus(), request.getAmount(), previousAmount);
+        }
+
         FundingCommitment commitment = existing
                 .orElseGet(() -> FundingCommitment.builder()
                         .fundingCycle(cycle)
@@ -332,6 +358,11 @@ public class FundingService {
         commitment.setAmount(request.getAmount());
         commitment.setCurrency(request.getCurrency());
         commitment.setStatus(request.getStatus());
+        if (changed(previousStatus, previousAmount, commitment)) {
+            // When the pledge last moved. It stayed frozen at the first pledge, so a firm that
+            // raised its number a month later still showed the original date.
+            commitment.setCommittedAt(Instant.now());
+        }
 
         FundingCommitment saved = commitmentRepository.save(commitment);
         recordEvent(actor, saved, previousStatus, previousAmount);
@@ -354,7 +385,13 @@ public class FundingService {
         }
 
         CommitmentStatus previousStatus = commitment.getStatus();
+        if (previousStatus == CommitmentStatus.COMMITTED) {
+            guardSignedPledge(status, commitment.getAmount(), commitment.getAmount());
+        }
         commitment.setStatus(status);
+        if (changed(previousStatus, commitment.getAmount(), commitment)) {
+            commitment.setCommittedAt(Instant.now());
+        }
 
         FundingCommitment saved = commitmentRepository.save(commitment);
         recordEvent(actor, saved, previousStatus, commitment.getAmount());
@@ -509,20 +546,45 @@ public class FundingService {
         Long min = request.getMinTicketSize();
         Long max = request.getMaxTicketSize();
         if (min != null && max != null && min > max) {
-            throw new BusinessRuleViolationException(
-                    "The minimum ticket size can't be larger than the maximum.");
+            throw new ValidationException("The minimum ticket size can't be larger than the maximum.");
         }
     }
 
+    /**
+     * Input errors, so 400 rather than the 409 reserved for "the state of the world forbids this".
+     * The figures are written the way the screen writes them — "₹1.00 Cr", not "10000000 INR".
+     */
     private void validateTicket(FundingCycle cycle, long amount) {
         if (cycle.getMinTicketSize() != null && amount < cycle.getMinTicketSize()) {
-            throw new BusinessRuleViolationException(
-                    "This round's minimum ticket is " + cycle.getMinTicketSize() + " " + cycle.getCurrency() + ".");
+            throw new ValidationException("This round's minimum ticket is "
+                    + MoneyFormat.format(cycle.getMinTicketSize(), cycle.getCurrency()) + ".");
         }
         if (cycle.getMaxTicketSize() != null && amount > cycle.getMaxTicketSize()) {
-            throw new BusinessRuleViolationException(
-                    "This round's maximum ticket is " + cycle.getMaxTicketSize() + " " + cycle.getCurrency() + ".");
+            throw new ValidationException("This round's maximum ticket is "
+                    + MoneyFormat.format(cycle.getMaxTicketSize(), cycle.getCurrency()) + ".");
         }
+    }
+
+    /**
+     * What a signed pledge may still do: stay as it is, go up, or be withdrawn.
+     *
+     * @throws BusinessRuleViolationException for a move down the ladder or a smaller figure — a
+     *         state conflict ("this is signed"), not malformed input.
+     */
+    private static void guardSignedPledge(CommitmentStatus requested, long requestedAmount, long currentAmount) {
+        if (requested != CommitmentStatus.COMMITTED && requested != CommitmentStatus.WITHDRAWN) {
+            throw new BusinessRuleViolationException(
+                    "This pledge is committed. To back out, withdraw it — it can't be moved down to "
+                            + (requested == CommitmentStatus.SOFT_COMMITTED ? "soft" : "an indication") + ".");
+        }
+        if (requested == CommitmentStatus.COMMITTED && requestedAmount < currentAmount) {
+            throw new BusinessRuleViolationException(
+                    "A committed pledge can't be reduced. Raise it, or withdraw it.");
+        }
+    }
+
+    private static boolean changed(CommitmentStatus previousStatus, Long previousAmount, FundingCommitment now) {
+        return previousStatus != now.getStatus() || previousAmount == null || !previousAmount.equals(now.getAmount());
     }
 
     private static String blankToNull(String value) {

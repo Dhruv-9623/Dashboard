@@ -31,7 +31,20 @@ export interface CategoryPoint {
   share: number
 }
 
-const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const MONTH_LABELS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+]
 
 const monthKey = (iso: string) => iso.slice(0, 7)
 
@@ -129,11 +142,14 @@ export function dealsPerQuarter(investments: InvestmentDTO[], now: Date = new Da
 
   const first = quarterOf(sorted[0].investmentDate)
   const lastDeal = quarterOf(sorted[sorted.length - 1].investmentDate)
-  const current = { year: now.getFullYear(), quarter: Math.floor(now.getMonth() / 3) + 1 }
+  const current = {
+    year: now.getFullYear(),
+    quarter: Math.floor(now.getMonth() / 3) + 1,
+  }
   // Whichever is later. A future-dated cheque still extends the series past today.
   const last =
-    current.year > lastDeal.year
-      || (current.year === lastDeal.year && current.quarter > lastDeal.quarter)
+    current.year > lastDeal.year ||
+    (current.year === lastDeal.year && current.quarter > lastDeal.quarter)
       ? current
       : lastDeal
 
@@ -182,10 +198,18 @@ export function dealsPerMonth(investments: InvestmentDTO[]): TimePoint[] {
  * Only active and exited positions count; a write-off is money that is gone, and
  * showing it as sector exposure would overstate the book.
  */
-export function sectorExposure(investments: InvestmentDTO[], currency: string): CategoryPoint[] {
+export function sectorExposure(
+  investments: InvestmentDTO[],
+  currency: string,
+  includeExited = false
+): CategoryPoint[] {
+  // Exposure is money still at work. Counting an exited position made Fintech 65% of the book here
+  // while the Pulse digest, which counts active holdings only, said 71%.
   const relevant = investments.filter(
     (investment) =>
-      investment.currency === currency && investment.status !== InvestmentStatus.WRITTEN_OFF
+      investment.currency === currency &&
+      investment.status !== InvestmentStatus.WRITTEN_OFF &&
+      (includeExited || investment.status !== InvestmentStatus.EXITED)
   )
 
   const totals = new Map<string, number>()
@@ -245,7 +269,12 @@ export function roundExposure(
 export function concentration(investments: InvestmentDTO[], currency: string) {
   const relevant = investments.filter((investment) => investment.currency === currency)
   if (relevant.length === 0) {
-    return { average: 0, median: 0, largestShare: 0, topName: null as string | null }
+    return {
+      average: 0,
+      median: 0,
+      largestShare: 0,
+      topName: null as string | null,
+    }
   }
 
   const amounts = relevant.map((investment) => investment.amount).sort((a, b) => a - b)
@@ -257,16 +286,18 @@ export function concentration(investments: InvestmentDTO[], currency: string) {
   for (const investment of relevant) {
     const existing = perCompany.get(investment.startupId)
     if (existing) existing.amount += investment.amount
-    else perCompany.set(investment.startupId, { name: investment.startupName, amount: investment.amount })
+    else
+      perCompany.set(investment.startupId, {
+        name: investment.startupName,
+        amount: investment.amount,
+      })
   }
   const largest = [...perCompany.values()].sort((a, b) => b.amount - a.amount)[0]
 
   return {
     average: total / amounts.length,
     median:
-      amounts.length % 2 === 0
-        ? (amounts[middle - 1] + amounts[middle]) / 2
-        : amounts[middle],
+      amounts.length % 2 === 0 ? (amounts[middle - 1] + amounts[middle]) / 2 : amounts[middle],
     largestShare: total > 0 ? largest.amount / total : 0,
     topName: largest.name,
   }

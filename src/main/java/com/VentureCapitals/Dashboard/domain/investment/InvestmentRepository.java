@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Set;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -56,6 +57,17 @@ public interface InvestmentRepository extends JpaRepository<Investment, UUID> {
             + "where i.vcFirm.id = :firmId and i.status = :status")
     long countDistinctCompaniesByStatus(@Param("firmId") UUID firmId,
                                         @Param("status") InvestmentStatus status);
+
+    long countByVcFirmId(UUID vcFirmId);
+
+    /** Every position the firm has in a given state, with its company — for comparing and summarising. */
+    @EntityGraph(attributePaths = {"startup"}, type = EntityGraph.EntityGraphType.LOAD)
+    List<Investment> findByVcFirmIdAndStatus(UUID vcFirmId, InvestmentStatus status);
+
+    /** Every company the firm has ever put money into, whatever became of it. */
+    @Query("select distinct i.startup.id from Investment i where i.vcFirm.id = :firmId")
+    Set<UUID> findStartupIdsByFirm(@Param("firmId") UUID firmId);
+
 
     interface CurrencyTotal {
         String getCurrency();

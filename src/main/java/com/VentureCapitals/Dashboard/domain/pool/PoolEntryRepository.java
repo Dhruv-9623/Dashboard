@@ -4,9 +4,12 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.query.Param;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Repository
@@ -26,4 +29,8 @@ public interface PoolEntryRepository extends JpaRepository<PoolEntry, UUID> {
     boolean existsByVcFirmIdAndStartupId(UUID vcFirmId, UUID startupId);
 
     long countByVcFirmId(UUID vcFirmId);
+
+    /** The platform startups the firm is tracking (off-platform entries have none). */
+    @Query("select p.startup.id from PoolEntry p where p.vcFirm.id = :firmId and p.startup is not null")
+    Set<UUID> findStartupIdsByFirm(@Param("firmId") UUID firmId);
 }

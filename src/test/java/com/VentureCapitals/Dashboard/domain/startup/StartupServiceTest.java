@@ -37,6 +37,8 @@ class StartupServiceTest extends BaseUnitTest {
     private VCMemberRepository vcMemberRepository;
     @Mock
     private com.VentureCapitals.Dashboard.domain.funding.FundingCycleRepository fundingCycleRepository;
+    @Mock
+    private com.VentureCapitals.Dashboard.domain.insights.ProfileViewService profileViews;
     @InjectMocks
     private StartupService startupService;
 
@@ -176,5 +178,32 @@ class StartupServiceTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> startupService.createStartup(founder, validRequest()))
                 .isInstanceOf(BusinessRuleViolationException.class);
+    }
+
+    @Test
+    void a_visit_from_outside_the_team_is_counted_as_a_profile_view() {
+        UUID id = UUID.randomUUID();
+        User viewer = founder();
+        when(startupRepository.findById(id)).thenReturn(Optional.of(startup(id)));
+        when(memberRepository.findByUserId(viewer.getId())).thenReturn(Optional.empty());
+
+        startupService.viewStartup(viewer, id);
+
+        verify(profileViews).record(viewer, com.VentureCapitals.Dashboard.common.TargetType.STARTUP, id);
+    }
+
+    @Test
+    void the_team_looking_at_its_own_page_is_not_a_view() {
+        UUID id = UUID.randomUUID();
+        User viewer = founder();
+        Startup own = startup(id);
+        when(startupRepository.findById(id)).thenReturn(Optional.of(own));
+        when(memberRepository.findByUserId(viewer.getId())).thenReturn(Optional.of(
+                StartupMember.builder().user(viewer).startup(own).role(StartupRole.FOUNDER)
+                        .joinedAt(java.time.Instant.now()).build()));
+
+        startupService.viewStartup(viewer, id);
+
+        org.mockito.Mockito.verifyNoInteractions(profileViews);
     }
 }

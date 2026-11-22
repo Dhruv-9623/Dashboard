@@ -56,7 +56,6 @@ describe('errorMessage', () => {
   it('still shows a 404 written for a person', () => {
     expect(errorMessage(new ApiError('ENTITY_NOT_FOUND', 'That round has been deleted.', 404))).toBe(
       'That round has been deleted.'
-      'That item no longer exists.'
     )
   })
 
