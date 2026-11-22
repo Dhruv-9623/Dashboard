@@ -533,7 +533,6 @@ recomputes all three from the commitments it holds.
 - Unused API methods: `uploadApi`, `eventApi.get`, `eventApi.listAttendees`, `conflictApi.listReports`, `vcFirmApi.removeMember`, `changeMemberRole` (no UI yet), `investmentApi.get`, `fundingApi.get`, `digestApi.get`.
 - Refresh `frontend/README.md` (documents only 2 of 16 features).
 - ~~CI: GitHub Actions~~, ~~Vitest for `api-client`~~, ~~mock harness states~~ — all done in the third pass. `?mock=firstrun` is the one variant not built: a brand-new account with no firm or startup is already reachable by registering.
-- The five older testing documents (`TEST_FRAMEWORK.md`, `TESTING_CHECKLIST.md`, `TESTING_SETUP_SUMMARY.md`, `TESTING_SYSTEM_OVERVIEW.md`, and the historical half of `TESTING.md`) overlap and partly describe scaffolding that no longer exists. Worth collapsing into `TESTING.md` plus one conventions file.
 
 ---
 
