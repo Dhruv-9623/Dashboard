@@ -83,8 +83,7 @@ public class CommitmentController {
             @PathVariable UUID id,
             @Valid @RequestBody CommitmentStatusRequest request) {
 
-        return ResponseEntity.ok(ApiResponse.ok(FundingMapper.toDTO(
-                fundingService.updateCommitmentStatus(user, id, request.getStatus()))));
+        return ResponseEntity.ok(ApiResponse.ok(FundingMapper.toBookDTO(fundingService.updateCommitmentStatus(user, id, request.getStatus()))));
     }
 
     /**
@@ -102,7 +101,6 @@ public class CommitmentController {
             @Valid @RequestBody(required = false) ConvertCommitmentRequest request) {
 
         ConvertCommitmentRequest body = request != null ? request : new ConvertCommitmentRequest();
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(FundingMapper.toDTO(
-                fundingService.convert(user, id, body))));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(FundingMapper.toBookDTO(fundingService.convert(user, id, body))));
     }
 }

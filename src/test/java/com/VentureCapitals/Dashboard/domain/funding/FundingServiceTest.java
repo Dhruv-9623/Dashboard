@@ -2,11 +2,13 @@ package com.VentureCapitals.Dashboard.domain.funding;
 
 import com.VentureCapitals.Dashboard.common.exception.BusinessRuleViolationException;
 import com.VentureCapitals.Dashboard.common.exception.UnauthorizedException;
+import com.VentureCapitals.Dashboard.common.exception.ValidationException;
 import com.VentureCapitals.Dashboard.config.BaseUnitTest;
 import com.VentureCapitals.Dashboard.domain.investment.Investment;
 import com.VentureCapitals.Dashboard.domain.investment.InvestmentRequest;
 import com.VentureCapitals.Dashboard.domain.investment.InvestmentRound;
 import com.VentureCapitals.Dashboard.domain.investment.InvestmentService;
+import com.VentureCapitals.Dashboard.domain.signals.SignalService;
 import com.VentureCapitals.Dashboard.domain.startup.Startup;
 import com.VentureCapitals.Dashboard.domain.startup.StartupMember;
 import com.VentureCapitals.Dashboard.domain.startup.StartupMemberRepository;
@@ -61,6 +63,8 @@ class FundingServiceTest extends BaseUnitTest {
     private VCMemberRepository vcMemberRepository;
     @Mock
     private InvestmentService investmentService;
+    @Mock
+    private SignalService signalService;
 
     private FundingService service;
 
@@ -73,7 +77,7 @@ class FundingServiceTest extends BaseUnitTest {
     @Override
     public void setUp() {
         service = new FundingService(cycleRepository, commitmentRepository, eventRepository,
-                startupMemberRepository, new FirmAccessPolicy(vcMemberRepository), investmentService);
+                startupMemberRepository, new FirmAccessPolicy(vcMemberRepository), investmentService, signalService);
 
         founder = TestDataBuilder.user().withId(UUID.randomUUID()).withUserType(UserType.STARTUP).build();
         investor = TestDataBuilder.user().withId(UUID.randomUUID()).withUserType(UserType.VC).build();
@@ -378,7 +382,7 @@ class FundingServiceTest extends BaseUnitTest {
         request.setCurrency("USD");
 
         assertThatThrownBy(() -> service.commit(investor, cycle.getId(), request))
-                .isInstanceOf(BusinessRuleViolationException.class)
+                .isInstanceOf(ValidationException.class)
                 .hasMessageContaining("INR");
     }
 
@@ -390,8 +394,9 @@ class FundingServiceTest extends BaseUnitTest {
         when(cycleRepository.findWithStartupById(cycle.getId())).thenReturn(Optional.of(cycle));
 
         assertThatThrownBy(() -> service.commit(investor, cycle.getId(), commitment(1_000_000L, CommitmentStatus.COMMITTED)))
-                .isInstanceOf(BusinessRuleViolationException.class)
-                .hasMessageContaining("minimum ticket");
+                .isInstanceOf(ValidationException.class)
+                // ₹50 L, not "5000000 INR": the same words the founder used to set the band.
+                .hasMessageContaining("minimum ticket is ₹50.00 L");
     }
 
     @Test
@@ -402,8 +407,8 @@ class FundingServiceTest extends BaseUnitTest {
         when(cycleRepository.findWithStartupById(cycle.getId())).thenReturn(Optional.of(cycle));
 
         assertThatThrownBy(() -> service.commit(investor, cycle.getId(), commitment(9_000_000L, CommitmentStatus.COMMITTED)))
-                .isInstanceOf(BusinessRuleViolationException.class)
-                .hasMessageContaining("maximum ticket");
+                .isInstanceOf(ValidationException.class)
+                .hasMessageContaining("maximum ticket is ₹50.00 L");
     }
 
     @Test
@@ -414,7 +419,7 @@ class FundingServiceTest extends BaseUnitTest {
         request.setMaxTicketSize(1_000_000L);
 
         assertThatThrownBy(() -> service.createCycle(founder, request))
-                .isInstanceOf(BusinessRuleViolationException.class)
+                .isInstanceOf(ValidationException.class)
                 .hasMessageContaining("minimum ticket size");
     }
 
@@ -440,6 +445,128 @@ class FundingServiceTest extends BaseUnitTest {
         assertThat(saved.getId()).isEqualTo(existing.getId());
         assertThat(saved.getAmount()).isEqualTo(8_000_000L);
         assertThat(saved.getStatus()).isEqualTo(CommitmentStatus.COMMITTED);
+    }
+
+    // --- Signed pledges, withdrawal, and the dates on a pledge --------------------------------
+
+    private FundingCommitment existingPledge(FundingCycle cycle, long amount, CommitmentStatus status) {
+        FundingCommitment existing = FundingCommitment.builder()
+                .fundingCycle(cycle).vcFirm(firm).amount(amount).currency("INR")
+                .status(status).committedAt(Instant.parse("2026-01-01T00:00:00Z")).build();
+        existing.setId(UUID.randomUUID());
+        when(cycleRepository.findWithStartupById(cycle.getId())).thenReturn(Optional.of(cycle));
+        when(commitmentRepository.findByFundingCycleIdAndVcFirmId(cycle.getId(), firm.getId()))
+                .thenReturn(List.of(existing));
+        return existing;
+    }
+
+    @Test
+    void a_pledge_cannot_be_opened_as_withdrawn() {
+        investorIs(VCRole.OWNER);
+        FundingCycle cycle = openCycle();
+
+        // Without this a firm could "withdraw" from a round it never joined — or, because the
+        // endpoint replaces the firm's pledge, wipe a signed one with a single call.
+        assertThatThrownBy(() -> service.commit(investor, cycle.getId(),
+                commitment(1_000_000L, CommitmentStatus.WITHDRAWN)))
+                .isInstanceOf(ValidationException.class)
+                .hasMessageContaining("withdraw");
+        verify(commitmentRepository, never()).save(any());
+    }
+
+    @Test
+    void a_signed_pledge_cannot_be_reposted_as_an_indication() {
+        investorIs(VCRole.OWNER);
+        FundingCycle cycle = openCycle();
+        existingPledge(cycle, 60_000_000L, CommitmentStatus.COMMITTED);
+
+        assertThatThrownBy(() -> service.commit(investor, cycle.getId(),
+                commitment(60_000_000L, CommitmentStatus.INDICATED)))
+                .isInstanceOf(BusinessRuleViolationException.class)
+                .hasMessageContaining("withdraw it");
+        verify(commitmentRepository, never()).save(any());
+    }
+
+    @Test
+    void a_signed_pledge_cannot_be_reposted_at_a_smaller_figure() {
+        investorIs(VCRole.OWNER);
+        FundingCycle cycle = openCycle();
+        existingPledge(cycle, 60_000_000L, CommitmentStatus.COMMITTED);
+
+        assertThatThrownBy(() -> service.commit(investor, cycle.getId(),
+                commitment(10_000_000L, CommitmentStatus.COMMITTED)))
+                .isInstanceOf(BusinessRuleViolationException.class)
+                .hasMessageContaining("can't be reduced");
+    }
+
+    @Test
+    void a_signed_pledge_can_still_be_raised() {
+        investorIs(VCRole.OWNER);
+        FundingCycle cycle = openCycle();
+        existingPledge(cycle, 60_000_000L, CommitmentStatus.COMMITTED);
+        when(commitmentRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+
+        FundingCommitment saved = service.commit(investor, cycle.getId(),
+                commitment(80_000_000L, CommitmentStatus.COMMITTED));
+
+        assertThat(saved.getAmount()).isEqualTo(80_000_000L);
+    }
+
+    @Test
+    void a_signed_pledge_cannot_be_moved_down_by_patch_either() {
+        investorIs(VCRole.OWNER);
+        FundingCommitment existing = commitmentOf(firm, 60_000_000L, CommitmentStatus.COMMITTED);
+        when(commitmentRepository.findWithCycleById(existing.getId())).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> service.updateCommitmentStatus(investor, existing.getId(), CommitmentStatus.SOFT_COMMITTED))
+                .isInstanceOf(BusinessRuleViolationException.class);
+    }
+
+    @Test
+    void a_signed_pledge_can_be_withdrawn_and_a_withdrawn_one_can_come_back() {
+        investorIs(VCRole.OWNER);
+        FundingCycle cycle = openCycle();
+        FundingCommitment existing = existingPledge(cycle, 60_000_000L, CommitmentStatus.COMMITTED);
+        when(commitmentRepository.findWithCycleById(existing.getId())).thenReturn(Optional.of(existing));
+        when(commitmentRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+
+        assertThat(service.updateCommitmentStatus(investor, existing.getId(), CommitmentStatus.WITHDRAWN).getStatus())
+                .isEqualTo(CommitmentStatus.WITHDRAWN);
+
+        // Back on the ladder through the normal route, at any level — the downgrade guard only
+        // protects a pledge that is currently signed.
+        assertThat(service.commit(investor, cycle.getId(), commitment(5_000_000L, CommitmentStatus.INDICATED)).getStatus())
+                .isEqualTo(CommitmentStatus.INDICATED);
+    }
+
+    @Test
+    void the_date_on_a_pledge_moves_when_the_pledge_does() {
+        investorIs(VCRole.OWNER);
+        FundingCycle cycle = openCycle();
+        FundingCommitment existing = existingPledge(cycle, 20_000_000L, CommitmentStatus.INDICATED);
+        Instant first = existing.getCommittedAt();
+        when(commitmentRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+
+        FundingCommitment saved = service.commit(investor, cycle.getId(),
+                commitment(30_000_000L, CommitmentStatus.SOFT_COMMITTED));
+
+        // It stayed frozen at the first pledge, so a firm that raised its number a month later
+        // still showed the original date.
+        assertThat(saved.getCommittedAt()).isAfter(first);
+    }
+
+    @Test
+    void restating_a_pledge_unchanged_leaves_its_date_alone() {
+        investorIs(VCRole.OWNER);
+        FundingCycle cycle = openCycle();
+        FundingCommitment existing = existingPledge(cycle, 20_000_000L, CommitmentStatus.INDICATED);
+        Instant first = existing.getCommittedAt();
+        when(commitmentRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+
+        FundingCommitment saved = service.commit(investor, cycle.getId(),
+                commitment(20_000_000L, CommitmentStatus.INDICATED));
+
+        assertThat(saved.getCommittedAt()).isEqualTo(first);
     }
 
     // --- Rule 3: commitment visibility --------------------------------------------------------

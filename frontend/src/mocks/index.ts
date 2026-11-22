@@ -1,5 +1,6 @@
 import { makeDb } from './fixtures'
 import { bookTotals } from '@/features/funding/types'
+import { formatMoney } from '@/lib/constants'
 import type { MockDb } from './fixtures'
 
 // Dev-only fetch shim so the UI can be reviewed before the backend exists.
@@ -332,7 +333,6 @@ const routes: Array<[string, RegExp, Handler]> = [
           (!sector || c.startupSector === sector) &&
           (!stage || c.startupStage === stage) &&
           (!startupId || c.startupId === startupId)
-          (!stage || c.startupStage === stage)
       ),
       url
     )
@@ -368,22 +368,28 @@ const routes: Array<[string, RegExp, Handler]> = [
     // The same four guards as FundingService.commit. The mock used to accept anything, so a
     // ₹10 pledge against a ₹50 L–₹3 Cr band went through here and would have been refused by the
     // real API — the fixture server hiding the contract instead of standing in for it.
+    if (body.status === 'WITHDRAWN') {
+      return refuse('To withdraw a pledge, use the withdraw action on it. A new pledge starts as indicated, soft or committed.', 400)
+    }
     if (cycle.status !== 'OPEN') return refuse("This round isn't open for commitments.")
     if (body.currency !== cycle.currency) {
-      return refuse(`This round is raising in ${cycle.currency}.`)
+      return refuse(`This round is raising in ${cycle.currency}.`, 400)
     }
     if (cycle.minTicketSize !== null && body.amount < cycle.minTicketSize) {
-      return refuse(`This round's minimum ticket is ${cycle.minTicketSize} ${cycle.currency}.`)
+      return refuse(`This round's minimum ticket is ${formatMoney(cycle.minTicketSize, cycle.currency)}.`, 400)
     }
     if (cycle.maxTicketSize !== null && body.amount > cycle.maxTicketSize) {
-      return refuse(`This round's maximum ticket is ${cycle.maxTicketSize} ${cycle.currency}.`)
+      return refuse(`This round's maximum ticket is ${formatMoney(cycle.maxTicketSize, cycle.currency)}.`, 400)
     }
+    // A signed pledge can stay, go up, or be withdrawn — never be re-posted lower.
+    const signed = db.commitments.find(
+      (c) => c.fundingCycleId === params[0] && c.vcFirmId === 'f-1' && c.status === 'COMMITTED'
+    )
+    if (signed && body.status !== 'COMMITTED') {
+      return refuse(`This pledge is committed. To back out, withdraw it — it can't be moved down to ${body.status === 'SOFT_COMMITTED' ? 'soft' : 'an indication'}.`)
     }
-    if (cycle.minTicketSize !== null && body.amount < cycle.minTicketSize) {
-      return refuse(`This round's minimum ticket is ${cycle.minTicketSize} ${cycle.currency}.`)
-    }
-    if (cycle.maxTicketSize !== null && body.amount > cycle.maxTicketSize) {
-      return refuse(`This round's maximum ticket is ${cycle.maxTicketSize} ${cycle.currency}.`)
+    if (signed && body.amount < signed.amount) {
+      return refuse("A committed pledge can't be reduced. Raise it, or withdraw it.")
     }
 
     const existingIndex = db.commitments.findIndex(
@@ -446,8 +452,16 @@ const routes: Array<[string, RegExp, Handler]> = [
   ['PATCH', /^\/api\/commitments\/([^/]+)$/, ({ params, body }) => {
     const commitment = db.commitments.find((c) => c.id === params[0])
     if (!commitment) return undefined
+    // Only the firm that made the pledge moves it; a founder is read-only (the server answers 403).
+    if (userType === 'startup' || commitment.vcFirmId !== 'f-1') {
+      return refuse("You don't have permission to do this", 403)
+    }
+    if (commitment.status === 'COMMITTED' && body.status !== 'COMMITTED' && body.status !== 'WITHDRAWN') {
+      return refuse("This pledge is committed. To back out, withdraw it.")
+    }
     const previous = { ...commitment }
     commitment.status = body.status
+    if (previous.status !== body.status) commitment.committedAt = now()
     recordEvent(commitment, previous)
     // Moving along the ladder moves the money between bands, so the round has to be recounted.
     recountCycle(commitment.fundingCycleId)
@@ -662,6 +676,11 @@ const routes: Array<[string, RegExp, Handler]> = [
     const event = { id: uid('e'), hostName: db.firm.name, hostUserId: db.user.id, attendeeCount: 1, myRsvp: 'GOING', description: null, endTime: null, location: null, virtualLink: null, ...body }
     db.events.unshift(event as never)
     return event
+  }],
+  ['DELETE', /^\/api\/events\/([^/]+)$/, ({ params }) => {
+    const index = db.events.findIndex((e) => e.id === params[0])
+    if (index >= 0) db.events.splice(index, 1)
+    return undefined
   }],
   ['GET', /^\/api\/events\/([^/]+)$/, ({ params }) =>
     db.events.find((e) => e.id === params[0]) ?? db.events[0]],

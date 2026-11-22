@@ -5,6 +5,8 @@ import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
@@ -45,4 +47,10 @@ public class VCFirm extends BaseEntity {
     private String location;
 
     private Integer foundedYear;
+
+    /** Recorded only for now — nothing is billed. See {@link PlanTier}. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "plan_tier", nullable = false)
+    @Builder.Default
+    private PlanTier planTier = PlanTier.FREE;
 }

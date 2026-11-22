@@ -12,10 +12,6 @@ import {
   ticketProblem,
 } from './types'
 import type { FundingCommitmentDTO, FundingCycleDTO } from './types'
-  LADDER_STATUSES,
-  ticketProblem,
-} from './types'
-import type { FundingCycleDTO } from './types'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyState } from '@/components/EmptyState'
 import { MeetingScene } from '@/components/illustrations/MeetingScene'
@@ -71,9 +67,21 @@ const CommitModal = ({
   const [status, setStatus] = useState(existing?.status ?? CommitmentStatus.INDICATED)
   const queryClient = useQueryClient()
 
+  /**
+   * A signed pledge can only stay put or go up. The server refuses to lower it in level or in
+   * amount (backing out is a withdrawal, from Commitments), so the dialog doesn't offer either.
+   */
+  const signed = existing?.status === CommitmentStatus.COMMITTED
+  const levelOptions = signed
+    ? commitOptions.filter((option) => option.value === CommitmentStatus.COMMITTED)
+    : commitOptions
+
   /** Null when the pledge would be accepted. Checked here so the form answers immediately. */
   const problem = amount
-    ? ticketProblem(cycle, Number(amount), currency, formatMoney)
+    ? ticketProblem(cycle, Number(amount), currency, formatMoney) ??
+      (signed && existing && Number(amount) < existing.amount
+        ? `A committed pledge can't be reduced. Raise it, or withdraw it from Commitments.`
+        : null)
     : null
 
   const mutation = useMutation({
@@ -96,7 +104,6 @@ const CommitModal = ({
       open
       onClose={onClose}
       title={existing ? `Update your pledge to ${cycle.startupName}` : `Commit to ${cycle.startupName}`}
-      title={`Commit to ${cycle.startupName}`}
       description={`${roundLabel(cycle.roundType)} · target ${formatMoney(cycle.targetAmount, cycle.currency)}`}
       footer={
         <>
@@ -177,7 +184,7 @@ const CommitModal = ({
           <Label htmlFor="commit-status">Commitment level</Label>
           <Select
             id="commit-status"
-            options={commitOptions}
+            options={levelOptions}
             value={status}
             onChange={(event) => setStatus(event.target.value as CommitmentStatus)}
           />
@@ -223,8 +230,6 @@ export const DealFlowPage = () => {
   const pledgeByCycle = new Map(
     (book.data?.items ?? []).filter(isLive).map((pledge) => [pledge.fundingCycleId, pledge])
   )
-
-  })
 
   const cycles = query.data?.items ?? []
 
@@ -373,7 +378,6 @@ export const DealFlowPage = () => {
           onClose={() => setCommitting(null)}
         />
       )}
-      {committing && <CommitModal cycle={committing} onClose={() => setCommitting(null)} />}
     </>
   )
 }

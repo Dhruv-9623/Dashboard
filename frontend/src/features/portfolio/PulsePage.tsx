@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Alert } from '@/components/ui/Alert'
 import { Skeleton, SkeletonRows } from '@/components/ui/Skeleton'
-import { PulseIcon, SparkIcon, WarningIcon } from '@/components/icons'
+import { InfoIcon, PulseIcon, SparkIcon, WarningIcon } from '@/components/icons'
 import { cn } from '@/lib/utils'
 import { formatDate, formatDateTime, pluralize } from '@/lib/constants'
 
@@ -22,29 +22,33 @@ const severityVariants: Record<AlertSeverity, 'secondary' | 'warning' | 'danger'
   [AlertSeverity.CRITICAL]: 'danger',
 }
 
-const AlertRow = ({ alert }: { alert: DigestAlertDTO }) => (
-  <li className="flex items-start gap-3 rounded-lg border border-line p-3">
-    <WarningIcon
-      className={cn(
-        'mt-0.5 h-4 w-4 shrink-0',
-        alert.severity === AlertSeverity.CRITICAL
-          ? 'text-negative'
-          : alert.severity === AlertSeverity.WARNING
-            ? 'text-notice'
-            : 'text-ink-muted'
-      )}
-    />
-    <div className="min-w-0">
-      <div className="flex flex-wrap items-center gap-2">
-        {alert.startupName && (
-          <span className="text-sm font-medium text-ink">{alert.startupName}</span>
+const AlertRow = ({ alert }: { alert: DigestAlertDTO }) => {
+  // A warning triangle on an informational note reads as a problem. Only warnings and criticals get one.
+  const SeverityIcon = alert.severity === AlertSeverity.INFO ? InfoIcon : WarningIcon
+  return (
+    <li className="flex items-start gap-3 rounded-lg border border-line p-3">
+      <SeverityIcon
+        className={cn(
+          'mt-0.5 h-4 w-4 shrink-0',
+          alert.severity === AlertSeverity.CRITICAL
+            ? 'text-negative'
+            : alert.severity === AlertSeverity.WARNING
+              ? 'text-notice'
+              : 'text-ink-muted'
         )}
-        <Badge variant={severityVariants[alert.severity]}>{severityLabels[alert.severity]}</Badge>
+      />
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          {alert.startupName && (
+            <span className="text-sm font-medium text-ink">{alert.startupName}</span>
+          )}
+          <Badge variant={severityVariants[alert.severity]}>{severityLabels[alert.severity]}</Badge>
+        </div>
+        <p className="mt-1 text-sm text-ink-secondary">{alert.message}</p>
       </div>
-      <p className="mt-1 text-sm text-ink-secondary">{alert.message}</p>
-    </div>
-  </li>
-)
+    </li>
+  )
+}
 
 export const PulsePage = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null)

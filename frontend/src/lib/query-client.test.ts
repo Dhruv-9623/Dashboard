@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient } from '@tanstack/react-query'
-import { queryClient } from './query-client'
+import { queryClient, retryUnlessClientError } from './query-client'
 import { ApiError } from './api-client'
 import { subscribeToToasts } from '@/components/ui/toastBus'
 import type { ToastInput } from '@/components/ui/toastBus'
@@ -73,5 +73,25 @@ describe('global mutation error reporting', () => {
 
     expect(onError).toHaveBeenCalledOnce()
     expect(seen).toHaveLength(1)
+  })
+})
+
+describe('query retry policy', () => {
+  it('does not retry a client error, which would only repeat the same answer', () => {
+    // A missing endpoint was being requested twice on every page that used it.
+    expect(retryUnlessClientError(0, new ApiError('ENTITY_NOT_FOUND', 'Not here.', 404))).toBe(false)
+    expect(retryUnlessClientError(0, new ApiError('UNAUTHORIZED', 'No.', 403))).toBe(false)
+    expect(retryUnlessClientError(0, new ApiError('VALIDATION_ERROR', 'Bad.', 400))).toBe(false)
+  })
+
+  it('retries a server error once, since that can recover', () => {
+    const error = new ApiError('INTERNAL_ERROR', 'Boom.', 500)
+    expect(retryUnlessClientError(0, error)).toBe(true)
+    expect(retryUnlessClientError(1, error)).toBe(false)
+  })
+
+  it('retries a dropped connection once', () => {
+    expect(retryUnlessClientError(0, new TypeError('Failed to fetch'))).toBe(true)
+    expect(retryUnlessClientError(1, new TypeError('Failed to fetch'))).toBe(false)
   })
 })

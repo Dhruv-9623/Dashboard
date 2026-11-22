@@ -1,9 +1,11 @@
 package com.VentureCapitals.Dashboard.domain.startup;
 
+import com.VentureCapitals.Dashboard.common.TargetType;
 import com.VentureCapitals.Dashboard.common.exception.BusinessRuleViolationException;
 import com.VentureCapitals.Dashboard.common.exception.EntityNotFoundException;
 import com.VentureCapitals.Dashboard.common.exception.UnauthorizedException;
 import com.VentureCapitals.Dashboard.domain.funding.FundingCycleRepository;
+import com.VentureCapitals.Dashboard.domain.insights.ProfileViewService;
 import com.VentureCapitals.Dashboard.domain.user.User;
 import com.VentureCapitals.Dashboard.domain.user.UserRepository;
 import com.VentureCapitals.Dashboard.domain.user.UserType;
@@ -39,15 +41,18 @@ public class StartupService {
      * depending on the service would make the two services circular.
      */
     private final FundingCycleRepository fundingCycleRepository;
+    private final ProfileViewService profileViews;
 
     public StartupService(StartupRepository startupRepository, StartupMemberRepository memberRepository,
                           UserRepository userRepository, VCMemberRepository vcMemberRepository,
-                          FundingCycleRepository fundingCycleRepository) {
+                          FundingCycleRepository fundingCycleRepository,
+                          ProfileViewService profileViews) {
         this.startupRepository = startupRepository;
         this.memberRepository = memberRepository;
         this.userRepository = userRepository;
         this.vcMemberRepository = vcMemberRepository;
         this.fundingCycleRepository = fundingCycleRepository;
+        this.profileViews = profileViews;
     }
 
     /** Creates the profile and makes the creator its FOUNDER. */
@@ -84,6 +89,21 @@ public class StartupService {
     public Startup getStartup(UUID startupId) {
         return startupRepository.findById(startupId)
                 .orElseThrow(() -> new EntityNotFoundException("Startup not found: " + startupId));
+    }
+
+    /**
+     * A startup's profile as someone opens it. A visit from outside the team is counted for the
+     * Insights page; the team looking at its own page is not interest from anyone.
+     */
+    public Startup viewStartup(User viewer, UUID startupId) {
+        Startup startup = getStartup(startupId);
+        boolean own = memberRepository.findByUserId(viewer.getId())
+                .map(member -> member.getStartup().getId().equals(startupId))
+                .orElse(false);
+        if (!own) {
+            profileViews.record(viewer, TargetType.STARTUP, startupId);
+        }
+        return startup;
     }
 
     /** The startup the user belongs to, if any — empty before profile setup. */

@@ -2,7 +2,10 @@ package com.VentureCapitals.Dashboard.domain.vc;
 
 import com.VentureCapitals.Dashboard.common.exception.BusinessRuleViolationException;
 import com.VentureCapitals.Dashboard.common.exception.EntityNotFoundException;
+import com.VentureCapitals.Dashboard.common.TargetType;
 import com.VentureCapitals.Dashboard.common.exception.UnauthorizedException;
+import com.VentureCapitals.Dashboard.common.exception.ValidationException;
+import com.VentureCapitals.Dashboard.domain.insights.ProfileViewService;
 import com.VentureCapitals.Dashboard.domain.user.User;
 import com.VentureCapitals.Dashboard.domain.user.UserRepository;
 import com.VentureCapitals.Dashboard.domain.user.UserType;
@@ -11,6 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -23,13 +28,18 @@ public class VCFirmService {
     private final VCMemberRepository vcMemberRepository;
     private final UserRepository userRepository;
     private final FirmAccessPolicy accessPolicy;
+    private final VCFirmThesisRepository thesisRepository;
+    private final ProfileViewService profileViews;
 
     public VCFirmService(VCFirmRepository vcFirmRepository, VCMemberRepository vcMemberRepository,
-                         UserRepository userRepository, FirmAccessPolicy accessPolicy) {
+                         UserRepository userRepository, FirmAccessPolicy accessPolicy,
+                         VCFirmThesisRepository thesisRepository, ProfileViewService profileViews) {
         this.vcFirmRepository = vcFirmRepository;
         this.vcMemberRepository = vcMemberRepository;
         this.userRepository = userRepository;
         this.accessPolicy = accessPolicy;
+        this.thesisRepository = thesisRepository;
+        this.profileViews = profileViews;
     }
 
     public VCFirm createFirm(User owner, CreateVCFirmRequest request) {
@@ -102,6 +112,13 @@ public class VCFirmService {
 
         validateUserHasNoFirm(targetUser.getId());
 
+        PlanTier plan = firm.getPlanTier();
+        if (vcMemberRepository.countByFirmId(firmId) >= plan.seatLimit()) {
+            throw new BusinessRuleViolationException("The " + plan.label() + " plan includes "
+                    + plan.seatLimit() + (plan.seatLimit() == 1 ? " seat" : " seats")
+                    + ", and they are all taken. Choose a bigger plan in Settings to add teammates");
+        }
+
         VCMember member = VCMember.builder()
                 .user(targetUser)
                 .firm(firm)
@@ -161,6 +178,106 @@ public class VCFirmService {
         VCMember saved = vcMemberRepository.save(member);
         log.info("Member role changed: firmId={}, memberId={}, newRole={}", firmId, memberId, newRole);
         return saved;
+    }
+
+    /**
+     * Replaces the firm's thesis. Owner only — it decides what Deal Triage scores against, which
+     * is the firm's strategy, so it sits with the same role as the rest of the firm's details
+     * (Business Rule 2).
+     */
+    public VCFirmThesis updateThesis(UUID firmId, User actor, UpdateThesisRequest request) {
+        VCFirm firm = vcFirmRepository.findById(firmId)
+                .orElseThrow(() -> new EntityNotFoundException("VC Firm not found: " + firmId));
+        accessPolicy.requireOwner(actor, firmId);
+
+        Long min = request.getChequeSizeMin();
+        Long max = request.getChequeSizeMax();
+        if (min != null && max != null && min > max) {
+            throw new ValidationException("The minimum cheque size can't be larger than the maximum.");
+        }
+
+        List<String> sectors = distinctTrimmed(request.getSectors());
+        List<String> stages = distinctTrimmed(request.getStages());
+        if (sectors.isEmpty()) throw new ValidationException("Pick at least one sector — Deal Triage scores against these.");
+        if (stages.isEmpty()) throw new ValidationException("Pick at least one stage.");
+
+        VCFirmThesis thesis = thesisRepository.findByVcFirmId(firmId)
+                .orElseGet(() -> VCFirmThesis.builder().vcFirm(firm).build());
+        // Replace the lists' contents rather than the lists: Hibernate tracks the collection it
+        // loaded, and swapping in a new one forces a delete-all-and-reinsert it doesn't need.
+        thesis.getSectors().clear();
+        thesis.getSectors().addAll(sectors);
+        thesis.getStages().clear();
+        thesis.getStages().addAll(stages);
+        thesis.setChequeSizeMin(min);
+        thesis.setChequeSizeMax(max);
+        thesis.setCurrency(request.getCurrency());
+        thesis.setNotes(request.getNotes() == null || request.getNotes().isBlank() ? null : request.getNotes().trim());
+
+        VCFirmThesis saved = thesisRepository.save(thesis);
+        log.info("Thesis saved: firmId={}", firmId);
+        return saved;
+    }
+
+    /** Records the plan choice. Owner only, as billing is (CLAUDE.md: OWNER — billing). */
+    public VCFirm selectPlan(UUID firmId, User actor, PlanTier tier) {
+        VCFirm firm = vcFirmRepository.findById(firmId)
+                .orElseThrow(() -> new EntityNotFoundException("VC Firm not found: " + firmId));
+        accessPolicy.requireOwner(actor, firmId);
+
+        // Moving down can't strand people on a plan that has no room for them.
+        long seatsInUse = vcMemberRepository.countByFirmId(firmId);
+        if (seatsInUse > tier.seatLimit()) {
+            throw new BusinessRuleViolationException("The " + tier.label() + " plan includes " + tier.seatLimit()
+                    + (tier.seatLimit() == 1 ? " seat" : " seats") + " and your team has " + seatsInUse
+                    + ". Remove " + (seatsInUse - tier.seatLimit()) + " to switch");
+        }
+
+        firm.setPlanTier(tier);
+        VCFirm saved = vcFirmRepository.save(firm);
+        log.info("Plan selected: firmId={}, tier={}", firmId, tier);
+        return saved;
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<VCFirmThesis> findThesis(UUID firmId) {
+        return thesisRepository.findByVcFirmId(firmId);
+    }
+
+    /**
+     * A firm's profile as {@code viewer} may see it.
+     *
+     * <p>Members get the thesis too; everyone else gets the public profile, and their visit is
+     * counted. Doing both here keeps the rule in one place: the people who can see the private
+     * parts are exactly the people whose visits don't count as outside interest.
+     */
+    public FirmProfile viewFirm(User viewer, UUID firmId) {
+        VCFirm firm = vcFirmRepository.findById(firmId)
+                .orElseThrow(() -> new EntityNotFoundException("VC Firm not found: " + firmId));
+
+        boolean own = accessPolicy.findMembership(viewer)
+                .map(member -> member.getFirm().getId().equals(firmId))
+                .orElse(false);
+        if (!own) {
+            profileViews.record(viewer, TargetType.VC_FIRM, firmId);
+            return new FirmProfile(firm, null, false);
+        }
+        return new FirmProfile(firm, thesisRepository.findByVcFirmId(firmId).orElse(null), true);
+    }
+
+    /** The firm as its own members see it — thesis and plan included. */
+    @Transactional(readOnly = true)
+    public FirmProfile ownProfile(VCFirm firm) {
+        return new FirmProfile(firm, thesisRepository.findByVcFirmId(firm.getId()).orElse(null), true);
+    }
+
+    private static List<String> distinctTrimmed(List<String> values) {
+        if (values == null) return new ArrayList<>();
+        LinkedHashSet<String> seen = new LinkedHashSet<>();
+        for (String value : values) {
+            if (value != null && !value.isBlank()) seen.add(value.trim());
+        }
+        return new ArrayList<>(seen);
     }
 
     /** Public firm profile. */

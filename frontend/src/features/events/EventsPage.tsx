@@ -19,6 +19,9 @@ import { SkeletonRows } from '@/components/ui/Skeleton'
 import { CalendarIcon, PlusIcon, UsersIcon } from '@/components/icons'
 import { cn, safeUrl } from '@/lib/utils'
 import { formatDateTime } from '@/lib/constants'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { useAuth } from '@/features/auth/useAuth'
+import type { EventDTO } from './types'
 
 const typeOptions = Object.values(EventType).map((type) => ({
   value: type,
@@ -187,7 +190,9 @@ const CreateEventModal = ({ onClose }: { onClose: () => void }) => {
 export const EventsPage = () => {
   const [upcoming, setUpcoming] = useState(true)
   const [createOpen, setCreateOpen] = useState(false)
+  const [toDelete, setToDelete] = useState<EventDTO | null>(null)
   const queryClient = useQueryClient()
+  const { user } = useAuth()
 
   const query = useQuery({
     queryKey: eventKeys.all(upcoming),
@@ -197,6 +202,16 @@ export const EventsPage = () => {
   const rsvp = useMutation({
     mutationFn: ({ id, status }: { id: string; status: RsvpStatus }) => eventApi.rsvp(id, status),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['events'] }),
+  })
+
+  const remove = useMutation({
+    // Reported inside the dialog, so it opts out of the global error toast.
+    meta: { errorToast: false },
+    mutationFn: (id: string) => eventApi.remove(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['events'] })
+      setToDelete(null)
+    },
   })
 
   const events = query.data ?? []
@@ -268,7 +283,9 @@ export const EventsPage = () => {
                 <p className="mt-0.5 text-xs text-ink-muted">Hosted by {event.hostName}</p>
 
                 {event.description && (
-                  <p className="mt-3 line-clamp-2 text-sm text-ink-secondary">{event.description}</p>
+                  <p className="mt-3 line-clamp-2 text-sm text-ink-secondary">
+                    {event.description}
+                  </p>
                 )}
 
                 {upcoming && (
@@ -285,6 +302,14 @@ export const EventsPage = () => {
                         {rsvpLabels[status]}
                       </Button>
                     ))}
+                  </div>
+                )}
+
+                {user?.id === event.hostUserId && (
+                  <div className="mt-4 flex justify-end">
+                    <Button size="sm" variant="outline" onClick={() => setToDelete(event)}>
+                      Delete event
+                    </Button>
                   </div>
                 )}
 
@@ -305,6 +330,25 @@ export const EventsPage = () => {
       )}
 
       {createOpen && <CreateEventModal onClose={() => setCreateOpen(false)} />}
+
+      <ConfirmDialog
+        open={toDelete !== null}
+        title="Delete this event?"
+        description={
+          toDelete
+            ? `"${toDelete.title}" and everyone's replies to it will be removed. This can't be undone.`
+            : undefined
+        }
+        confirmLabel="Delete event"
+        pendingLabel="Deleting…"
+        isPending={remove.isPending}
+        error={remove.error}
+        onConfirm={() => toDelete && remove.mutate(toDelete.id)}
+        onCancel={() => {
+          setToDelete(null)
+          remove.reset()
+        }}
+      />
     </>
   )
 }

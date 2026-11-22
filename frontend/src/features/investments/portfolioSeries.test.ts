@@ -63,13 +63,15 @@ describe('cumulativeDeployed', () => {
 
   it('fills the empty months so a gap reads as flat, not as a missing tick', () => {
     const series = cumulativeDeployed(
-      [
-        investment({ investmentDate: '2024-11-01' }),
-        investment({ investmentDate: '2025-02-01' }),
-      ],
+      [investment({ investmentDate: '2024-11-01' }), investment({ investmentDate: '2025-02-01' })],
       'INR'
     )
-    expect(series.map((point) => point.period)).toEqual(['2024-11', '2024-12', '2025-01', '2025-02'])
+    expect(series.map((point) => point.period)).toEqual([
+      '2024-11',
+      '2024-12',
+      '2025-01',
+      '2025-02',
+    ])
   })
 
   it('never mixes currencies into one line', () => {
@@ -105,7 +107,7 @@ describe('dealsPerQuarter', () => {
         investment({ investmentDate: '2025-02-20' }),
         investment({ investmentDate: '2025-08-01' }),
       ],
-      inQ3of2025,
+      inQ3of2025
     )
 
     expect(series.map((point) => [point.label, point.value])).toEqual([
@@ -117,11 +119,8 @@ describe('dealsPerQuarter', () => {
 
   it('crosses a year boundary', () => {
     const series = dealsPerQuarter(
-      [
-        investment({ investmentDate: '2024-11-01' }),
-        investment({ investmentDate: '2025-02-01' }),
-      ],
-      new Date('2025-02-10T00:00:00Z'),
+      [investment({ investmentDate: '2024-11-01' }), investment({ investmentDate: '2025-02-01' })],
+      new Date('2025-02-10T00:00:00Z')
     )
     expect(series.map((point) => point.label)).toEqual(['Q4 24', 'Q1 25'])
   })
@@ -131,7 +130,7 @@ describe('dealsPerQuarter', () => {
     // reported a deal in the current quarter for a firm whose last one closed in April.
     const series = dealsPerQuarter(
       [investment({ investmentDate: '2026-04-01' })],
-      new Date('2026-11-07T00:00:00Z'),
+      new Date('2026-11-07T00:00:00Z')
     )
 
     expect(series.map((point) => [point.label, point.value])).toEqual([
@@ -172,6 +171,41 @@ describe('sectorExposure', () => {
 
     expect(sectors).toHaveLength(1)
     expect(sectors[0].label).toBe('Fintech')
+  })
+
+  it('leaves exited positions out, so the shares match the digest that counts active holdings', () => {
+    // ₹6 Cr Fintech and ₹2.5 Cr Logistics still at work, plus an exited ₹0.8 Cr: Fintech is 71%, not 65%.
+    const book = [
+      investment({ startupSector: 'Fintech', amount: 60_000_000 }),
+      investment({ startupSector: 'Logistics', amount: 25_000_000 }),
+      investment({
+        startupSector: 'Healthtech',
+        amount: 8_000_000,
+        status: InvestmentStatus.EXITED,
+      }),
+    ]
+
+    const sectors = sectorExposure(book, 'INR')
+
+    expect(sectors.map((sector) => sector.label)).toEqual(['Fintech', 'Logistics'])
+    expect(Math.round(sectors[0].share * 100)).toBe(71)
+  })
+
+  it('can include exited positions when asked, for a view that is about them', () => {
+    const sectors = sectorExposure(
+      [
+        investment({ startupSector: 'Fintech', amount: 1_000_000 }),
+        investment({
+          startupSector: 'Healthtech',
+          amount: 1_000_000,
+          status: InvestmentStatus.EXITED,
+        }),
+      ],
+      'INR',
+      true
+    )
+
+    expect(sectors).toHaveLength(2)
   })
 
   it('buckets a missing sector rather than rendering a blank row', () => {

@@ -222,6 +222,7 @@ import {
   Landmark,
   Layers,
   ListFilter,
+  Info,
   Minus,
   MoreHorizontal,
   Moon,
@@ -259,4 +260,5 @@ export const PanelLeftIcon = lucide(PanelLeft)
 export const TrendingUpIcon = lucide(TrendingUp)
 export const CircleCheckIcon = lucide(CircleCheck)
 export const AlertCircleIcon = lucide(AlertCircle)
+export const InfoIcon = lucide(Info)
 export const BankIcon = lucide(Landmark)

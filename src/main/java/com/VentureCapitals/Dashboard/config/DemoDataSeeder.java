@@ -1,5 +1,38 @@
 package com.VentureCapitals.Dashboard.config;
 
+import com.VentureCapitals.Dashboard.common.TargetType;
+import com.VentureCapitals.Dashboard.domain.conflict.ConflictService;
+import com.VentureCapitals.Dashboard.domain.digest.DigestService;
+import com.VentureCapitals.Dashboard.domain.events.Event;
+import com.VentureCapitals.Dashboard.domain.events.EventAttendee;
+import com.VentureCapitals.Dashboard.domain.events.EventAttendeeRepository;
+import com.VentureCapitals.Dashboard.domain.events.EventRepository;
+import com.VentureCapitals.Dashboard.domain.events.EventType;
+import com.VentureCapitals.Dashboard.domain.events.RsvpStatus;
+import com.VentureCapitals.Dashboard.domain.messaging.ConnectionRequest;
+import com.VentureCapitals.Dashboard.domain.messaging.ConnectionRequestRepository;
+import com.VentureCapitals.Dashboard.domain.messaging.ConnectionStatus;
+import com.VentureCapitals.Dashboard.domain.messaging.Conversation;
+import com.VentureCapitals.Dashboard.domain.messaging.ConversationRepository;
+import com.VentureCapitals.Dashboard.domain.messaging.Message;
+import com.VentureCapitals.Dashboard.domain.messaging.MessageRepository;
+import com.VentureCapitals.Dashboard.domain.opportunity.CreateOpportunityRequest;
+import com.VentureCapitals.Dashboard.domain.opportunity.DecideOpportunityRequest;
+import com.VentureCapitals.Dashboard.domain.opportunity.Opportunity;
+import com.VentureCapitals.Dashboard.domain.opportunity.OpportunityService;
+import com.VentureCapitals.Dashboard.domain.opportunity.OpportunityStatus;
+import com.VentureCapitals.Dashboard.domain.outreach.Outreach;
+import com.VentureCapitals.Dashboard.domain.outreach.OutreachRepository;
+import com.VentureCapitals.Dashboard.domain.outreach.OutreachStatus;
+import com.VentureCapitals.Dashboard.domain.signals.Sentiment;
+import com.VentureCapitals.Dashboard.domain.signals.Signal;
+import com.VentureCapitals.Dashboard.domain.signals.SignalRepository;
+import com.VentureCapitals.Dashboard.domain.signals.SignalType;
+import com.VentureCapitals.Dashboard.domain.suggestion.SuggestionService;
+import com.VentureCapitals.Dashboard.domain.vc.VCFirmThesis;
+import com.VentureCapitals.Dashboard.domain.vc.VCFirmThesisRepository;
+import com.VentureCapitals.Dashboard.domain.wishlist.WishlistItem;
+import com.VentureCapitals.Dashboard.domain.wishlist.WishlistItemRepository;
 import com.VentureCapitals.Dashboard.domain.funding.CommitmentEvent;
 import com.VentureCapitals.Dashboard.domain.funding.CommitmentEventRepository;
 import com.VentureCapitals.Dashboard.domain.funding.CommitmentStatus;
@@ -24,6 +57,7 @@ import com.VentureCapitals.Dashboard.domain.startup.StartupStage;
 import com.VentureCapitals.Dashboard.domain.user.User;
 import com.VentureCapitals.Dashboard.domain.user.UserRepository;
 import com.VentureCapitals.Dashboard.domain.user.UserType;
+import com.VentureCapitals.Dashboard.domain.vc.PlanTier;
 import com.VentureCapitals.Dashboard.domain.vc.VCFirm;
 import com.VentureCapitals.Dashboard.domain.vc.VCFirmRepository;
 import com.VentureCapitals.Dashboard.domain.vc.VCMember;
@@ -77,6 +111,19 @@ public class DemoDataSeeder implements ApplicationRunner {
     private final FundingCycleRepository fundingCycles;
     private final FundingCommitmentRepository commitments;
     private final CommitmentEventRepository events;
+    private final VCFirmThesisRepository theses;
+    private final SignalRepository signals;
+    private final ConnectionRequestRepository connectionRequests;
+    private final ConversationRepository conversations;
+    private final MessageRepository messages;
+    private final WishlistItemRepository wishlist;
+    private final EventRepository platformEvents;
+    private final EventAttendeeRepository attendees;
+    private final OutreachRepository outreach;
+    private final OpportunityService opportunityService;
+    private final ConflictService conflictService;
+    private final DigestService digestService;
+    private final SuggestionService suggestionService;
     private final PasswordEncoder passwordEncoder;
 
     @Value("${app.demo.password:Password123!}")
@@ -99,9 +146,12 @@ public class DemoDataSeeder implements ApplicationRunner {
                 .sectors(new ArrayList<>(List.of("SaaS", "Fintech", "AI/ML")))
                 .location("Bengaluru")
                 .foundedYear(2018)
+                // Three people on the team, so a plan with fewer than three seats would be one the demo already breaks.
+                .planTier(PlanTier.STARTER)
                 .build());
 
-        member(firm, user("owner", UserType.VC), VCRole.OWNER);
+        User owner = user("owner", UserType.VC);
+        member(firm, owner, VCRole.OWNER);
         VCMember manager = member(firm, user("pm", UserType.VC), VCRole.PORTFOLIO_MANAGER);
         member(firm, user("staff", UserType.VC), VCRole.STAFF);
 
@@ -117,8 +167,14 @@ public class DemoDataSeeder implements ApplicationRunner {
         // Both on Ledgerly: the account called "cofounder" used to be a FOUNDER of Shiprack, so
         // signing in as it showed a different startup and Ledgerly's team page listed one person.
         // A two-person team is also the only way to exercise the CO_FOUNDER role in the demo.
-        founder(ledgerly, user("founder", UserType.STARTUP), StartupRole.FOUNDER);
-        founder(ledgerly, user("cofounder", UserType.STARTUP), StartupRole.CO_FOUNDER);
+        User founderUser = user("founder", UserType.STARTUP);
+        User cofounderUser = user("cofounder", UserType.STARTUP);
+        founder(ledgerly, founderUser, StartupRole.FOUNDER);
+        founder(ledgerly, cofounderUser, StartupRole.CO_FOUNDER);
+        // A third company's founder, who is the one asking Meridian to connect. A connection is between
+        // organisations, so Ledgerly (already talking to Meridian) can't also have a request waiting.
+        User vaultlineFounder = user("vaultline", UserType.STARTUP);
+        founder(vaultline, vaultlineFounder, StartupRole.FOUNDER);
 
         investments.save(investment(firm, ledgerly, LocalDate.now().minusMonths(14),
                 60_000_000L, InvestmentRound.SERIES_A, new BigDecimal("9.50"), InvestmentStatus.ACTIVE,
@@ -189,12 +245,134 @@ public class DemoDataSeeder implements ApplicationRunner {
                 .closedAt(Instant.now().minus(Duration.ofDays(300)))
                 .build());
 
+        seedNetwork(firm, owner, manager, founderUser, vaultlineFounder, ledgerly, vaultline, kestrel);
+
         log.info("""
                 Demo data seeded.
                   VC:      owner{0}, pm{0}, staff{0}   (firm: Meridian Ventures)
                   Startup: founder{0}, cofounder{0}   (startup: Ledgerly)
                   Password for all of them comes from DEMO_PASSWORD / app.demo.password.
                 """.replace("{0}", DEMO_DOMAIN));
+    }
+
+    /**
+     * The parts of the product that are about people rather than money: triage, messaging, events,
+     * news. Seeded so each screen opens on something real instead of an empty state.
+     *
+     * <p>Opportunities, the conflict check, the digest and the suggestions go through the real
+     * services rather than being inserted by hand. They are derived data, and a demo that wrote
+     * its own scores would show numbers the product could not actually produce.
+     */
+    private void seedNetwork(VCFirm firm, User owner, VCMember manager, User founderUser, User vaultlineFounder,
+                             Startup ledgerly, Startup vaultline, VCFirm kestrel) {
+        // The thesis Deal Triage scores against.
+        VCFirmThesis thesis = VCFirmThesis.builder().vcFirm(firm).currency("INR")
+                .chequeSizeMin(10_000_000L).chequeSizeMax(100_000_000L)
+                .notes("Founder-led B2B software and fintech infrastructure; first institutional cheque.").build();
+        thesis.getSectors().addAll(List.of("Fintech", "SaaS", "Logistics"));
+        thesis.getStages().addAll(List.of("SEED", "SERIES_A"));
+        theses.save(thesis);
+
+        // --- Deal triage and the conflict check ---
+        Opportunity quantaloop = opportunityService.create(owner, CreateOpportunityRequest.builder()
+                .companyName("Quantaloop").website("https://quantaloop.example.com").sector("Fintech").stage("SEED")
+                .askAmount(40_000_000L).currency("INR").contactEmail("founders@quantaloop.example.com")
+                .description("Embedded credit decisioning for D2C brands, giving merchants working capital within a day "
+                        + "from their own sales data.").build());
+        opportunityService.decide(owner, quantaloop.getId(),
+                new DecideOpportunityRequest(OpportunityStatus.APPROVED, "Strong wedge. Taking a first call this week."));
+
+        Opportunity pocketly = opportunityService.create(manager.getUser(), CreateOpportunityRequest.builder()
+                .companyName("Pocketly").sector("Fintech").stage("SEED").askAmount(30_000_000L).currency("INR")
+                .description("Automated reconciliation for mid-market finance teams, matching bank statements to invoices.")
+                .build());
+        // Reads a lot like Ledgerly, which makes it the one worth a conflict check.
+        conflictService.run(manager.getUser(), pocketly.getId());
+
+        opportunityService.create(owner, CreateOpportunityRequest.builder()
+                .companyName("Veridian Grid").sector("Climate").stage("SERIES_B").askAmount(600_000_000L).currency("INR")
+                .description("Grid-scale battery analytics for state utilities.").build());
+
+        // --- News ---
+        signal(ledgerly, null, SignalType.FUNDING, Sentiment.POSITIVE, 2,
+                "Ledgerly opened a Series A round", "Raising up to ₹25.00 Cr.");
+        signal(ledgerly, null, SignalType.PRODUCT, Sentiment.POSITIVE, 6,
+                "Ledgerly adds Tally Prime sync", "Direct sync removes the manual export step for mid-market customers.");
+        signal(vaultline, null, SignalType.HIRING, Sentiment.NEUTRAL, 9,
+                "Vaultline hires its first head of compliance", "A signal the product is moving up-market.");
+        signal(null, kestrel, SignalType.FUNDING, Sentiment.POSITIVE, 14,
+                "Kestrel Capital closes a new fund", "A ₹800 Cr vehicle focused on seed and Series A in India.");
+        signal(null, null, SignalType.REGULATORY, Sentiment.NEGATIVE, 4,
+                "RBI tightens rules on digital lending partnerships", "Fintech lenders working through co-lending models face new disclosure duties.");
+        signal(null, null, SignalType.MARKET, Sentiment.NEUTRAL, 11,
+                "Indian seed funding steady quarter on quarter", "Deal count flat while median cheque size grew.");
+
+        // --- Messaging: one open conversation, one request waiting for an answer ---
+        ConnectionRequest accepted = connectionRequests.save(ConnectionRequest.builder()
+                .fromUser(owner).toUser(founderUser).status(ConnectionStatus.ACCEPTED)
+                .message("Following Ledgerly's growth — would love to hear about the Series A.")
+                .requestedAt(Instant.now().minus(Duration.ofDays(9)))
+                .respondedAt(Instant.now().minus(Duration.ofDays(8))).build());
+        Conversation chat = conversations.save(Conversation.builder().connectionRequest(accepted).build());
+        message(chat, owner, "Thanks for taking the request. Could you share the deck ahead of a call?", 8, true);
+        message(chat, founderUser, "Of course — sending it over now. We are targeting ₹25 Cr, ticket sizes ₹1–10 Cr.", 8, true);
+        message(chat, owner, "Perfect. Does Thursday work for a first conversation?", 2, false);
+
+        connectionRequests.save(ConnectionRequest.builder()
+                .fromUser(vaultlineFounder).toUser(owner).status(ConnectionStatus.PENDING)
+                .message("Thanks for the note. We'd like to walk you through our SOC 2 evidence tooling.")
+                .requestedAt(Instant.now().minus(Duration.ofDays(1))).build());
+
+        // --- Wishlists ---
+        wishlist.save(WishlistItem.builder().ownerUserId(owner.getId()).targetType(TargetType.STARTUP)
+                .targetId(vaultline.getId()).note("Revisit when they raise.").savedAt(Instant.now().minus(Duration.ofDays(5))).build());
+        wishlist.save(WishlistItem.builder().ownerUserId(founderUser.getId()).targetType(TargetType.VC_FIRM)
+                .targetId(kestrel.getId()).savedAt(Instant.now().minus(Duration.ofDays(3))).build());
+
+        // --- Outreach ---
+        outreach.save(Outreach.builder().fromFirm(firm).sentByUserId(owner.getId()).toStartup(vaultline)
+                .subject("Introduction from Meridian Ventures")
+                .body("We have been following Vaultline's compliance work and would like to learn more about your plans.")
+                .status(OutreachStatus.SENT).sentAt(Instant.now().minus(Duration.ofDays(6))).build());
+
+        // --- Events ---
+        Event demoDay = platformEvents.save(Event.builder().hostUser(owner).title("Meridian Demo Day")
+                .description("Eight seed-stage founders pitch to a room of investors.").eventType(EventType.DEMO_DAY)
+                .startTime(Instant.now().plus(Duration.ofDays(12))).endTime(Instant.now().plus(Duration.ofDays(12)).plus(Duration.ofHours(4)))
+                .location("Bengaluru").isPublic(true).build());
+        Event officeHours = platformEvents.save(Event.builder().hostUser(founderUser).title("Founder office hours: raising a Series A")
+                .eventType(EventType.OFFICE_HOURS).startTime(Instant.now().plus(Duration.ofDays(4)))
+                .virtualLink("https://meet.example.com/ledgerly-office-hours").isPublic(true).build());
+        Event past = platformEvents.save(Event.builder().hostUser(owner).title("Fintech founders mixer")
+                .eventType(EventType.NETWORKING).startTime(Instant.now().minus(Duration.ofDays(20)))
+                .location("Mumbai").isPublic(true).build());
+        attend(demoDay, owner, RsvpStatus.GOING);
+        attend(demoDay, founderUser, RsvpStatus.GOING);
+        attend(officeHours, founderUser, RsvpStatus.GOING);
+        attend(officeHours, owner, RsvpStatus.MAYBE);
+        attend(past, owner, RsvpStatus.GOING);
+
+        // --- Derived, from everything above ---
+        digestService.generate(owner);
+        suggestionService.regenerate(owner);
+        suggestionService.regenerate(founderUser);
+    }
+
+    private void signal(Startup startup, VCFirm firm, SignalType type, Sentiment sentiment, int daysAgo,
+                        String headline, String summary) {
+        signals.save(Signal.builder().relatedStartup(startup).relatedVcFirm(firm).headline(headline).summary(summary)
+                .signalType(type).sentiment(sentiment).publishedAt(Instant.now().minus(Duration.ofDays(daysAgo)))
+                .aiGenerated(false).build());
+    }
+
+    private void message(Conversation chat, User sender, String body, int daysAgo, boolean read) {
+        Instant sent = Instant.now().minus(Duration.ofDays(daysAgo));
+        messages.save(Message.builder().conversation(chat).sender(sender).body(body).sentAt(sent)
+                .readAt(read ? sent.plusSeconds(600) : null).build());
+    }
+
+    private void attend(Event event, User user, RsvpStatus status) {
+        attendees.save(EventAttendee.builder().event(event).user(user).rsvpStatus(status).rsvpAt(Instant.now()).build());
     }
 
     private User user(String localPart, UserType type) {
