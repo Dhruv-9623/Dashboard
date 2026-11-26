@@ -81,6 +81,9 @@ public class DigestService {
     /** Writes a digest of the last month from what the platform already knows. Any member may ask for one. */
     public Digest generate(User actor) {
         VCFirm firm = firmAccessPolicy.requireAnyMembership(actor).getFirm();
+        // Serialise per firm: three quick presses used to race on the one-digest-per-day index, and two
+        // of them failed with a 500. Now they take turns and each simply refreshes the day's digest.
+        digests.lockFirm("digest:" + firm.getId());
         Instant now = Instant.now(clock);
         Instant since = now.minus(PERIOD);
 

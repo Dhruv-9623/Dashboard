@@ -92,4 +92,15 @@ class DigestServiceTest {
         assertThat(DigestService.roundLabel("PRE_SEED")).isEqualTo("Pre Seed");
         assertThat(DigestService.roundLabel("SEED")).isEqualTo("Seed");
     }
+
+    @Test
+    void generating_takes_the_firms_lock_first_so_simultaneous_presses_queue_up() {
+        when(digests.findByVcFirmIdAndPeriodEnd(eq(firm.getId()), any())).thenReturn(List.of());
+
+        service.generate(actor);
+
+        var order = inOrder(digests);
+        order.verify(digests).lockFirm("digest:" + firm.getId());
+        order.verify(digests).save(any(Digest.class));
+    }
 }

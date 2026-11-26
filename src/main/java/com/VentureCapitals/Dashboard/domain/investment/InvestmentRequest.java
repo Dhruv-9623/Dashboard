@@ -41,7 +41,7 @@ public class InvestmentRequest {
     @NotNull(message = "Round is required")
     private InvestmentRound round;
 
-    @DecimalMin(value = "0.00", message = "Equity can't be negative")
+    @DecimalMin(value = "0.00", inclusive = false, message = "Equity must be more than 0%")
     @DecimalMax(value = "100.00", message = "Equity can't exceed 100%")
     @Digits(integer = 3, fraction = 2, message = "Equity allows at most 2 decimal places")
     private BigDecimal equityPercentage;

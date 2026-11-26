@@ -135,4 +135,17 @@ class InvestmentServiceTest extends BaseUnitTest {
         assertThat(summary.getExitedCount()).isEqualTo(1);
         assertThat(summary.getWrittenOffCount()).isZero();
     }
+
+    @Test
+    void recording_the_same_investment_twice_is_refused() {
+        actorIs(VCRole.PORTFOLIO_MANAGER, firm);
+        UUID startupId = UUID.randomUUID();
+        when(investmentRepository.existsByVcFirmIdAndStartupIdAndInvestmentDateAndAmountAndCurrencyAndRound(
+                any(), any(), any(), any(), any(), any())).thenReturn(true);
+
+        assertThatThrownBy(() -> service.createInvestment(actor, request(startupId)))
+                .isInstanceOf(com.VentureCapitals.Dashboard.common.exception.BusinessRuleViolationException.class)
+                .hasMessageContaining("already recorded");
+        verify(investmentRepository, never()).save(any());
+    }
 }

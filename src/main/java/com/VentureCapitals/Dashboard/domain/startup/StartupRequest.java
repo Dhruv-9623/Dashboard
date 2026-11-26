@@ -47,7 +47,7 @@ public class StartupRequest {
     private String location;
 
     @Min(value = 1900, message = "Founded year looks too early")
-    @Max(value = 2100, message = "Founded year looks too late")
+    @com.VentureCapitals.Dashboard.common.validation.NotFutureYear(message = "Founded year can't be in the future")
     private Integer foundedYear;
 
     @PositiveOrZero(message = "Revenue can't be negative")

@@ -1,5 +1,6 @@
 package com.VentureCapitals.Dashboard.domain.investment;
 
+import com.VentureCapitals.Dashboard.common.exception.BusinessRuleViolationException;
 import com.VentureCapitals.Dashboard.common.exception.EntityNotFoundException;
 import com.VentureCapitals.Dashboard.domain.startup.Startup;
 import com.VentureCapitals.Dashboard.domain.startup.StartupRepository;
@@ -38,6 +39,14 @@ public class InvestmentService {
     public Investment createInvestment(User actor, InvestmentRequest request) {
         VCMember membership = accessPolicy.requireAnyMembership(actor);
         accessPolicy.require(actor, membership.getFirm().getId(), FirmAccessPolicy.INVESTMENT_EDITORS);
+
+        investmentRepository.lockFirm("investment:" + membership.getFirm().getId());
+        if (investmentRepository.existsByVcFirmIdAndStartupIdAndInvestmentDateAndAmountAndCurrencyAndRound(
+                membership.getFirm().getId(), request.getStartupId(), request.getInvestmentDate(),
+                request.getAmount(), request.getCurrency(), request.getRound())) {
+            throw new BusinessRuleViolationException(
+                    "This investment is already recorded: same company, date, amount and round.");
+        }
 
         Investment investment = Investment.builder()
                 .vcFirm(membership.getFirm())

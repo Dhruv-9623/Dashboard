@@ -1097,4 +1097,16 @@ class FundingServiceTest extends BaseUnitTest {
                 .isInstanceOf(UnauthorizedException.class);
         verify(investmentService, never()).createInvestment(any(), any());
     }
+
+    @Test
+    void a_maximum_ticket_larger_than_the_round_target_is_refused() {
+        founderOwnsStartup();
+        FundingCycleRequest request = request(FundingCycleStatus.OPEN);
+        request.setTargetAmount(50_000_000L);
+        request.setMaxTicketSize(100_000_000L);
+
+        assertThatThrownBy(() -> service.createCycle(founder, request))
+                .isInstanceOf(ValidationException.class)
+                .hasMessageContaining("target");
+    }
 }

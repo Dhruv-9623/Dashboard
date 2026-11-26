@@ -548,6 +548,10 @@ public class FundingService {
         if (min != null && max != null && min > max) {
             throw new ValidationException("The minimum ticket size can't be larger than the maximum.");
         }
+        Long target = request.getTargetAmount();
+        if (target != null && max != null && max > target) {
+            throw new ValidationException("The maximum ticket size can't be larger than the round's target.");
+        }
     }
 
     /**
