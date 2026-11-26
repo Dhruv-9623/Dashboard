@@ -1,4 +1,4 @@
-import { MutationCache, QueryClient } from '@tanstack/react-query'
+import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query'
 import { publishToast } from '@/components/ui/toastBus'
 import { ApiError } from './api-client'
 import { errorMessage } from './errorMessage'
@@ -16,7 +16,27 @@ export const retryUnlessClientError = (failureCount: number, error: unknown) => 
   return failureCount < 1
 }
 
-export const queryClient = new QueryClient({
+/**
+ * When the session ends while a page is open (expired, or signed out in another tab) the server starts
+ * answering 401. Two things have to happen, or the screen sits on grey placeholders:
+ *
+ * 1. Mark the user signed out. `['auth', 'me']` never goes stale on its own, so without this the route
+ *    guard keeps believing there is a user and never redirects; setting it to `null` sends the app to
+ *    the sign-in page the same way a reload would.
+ * 2. Drop everything else cached, so nothing from the previous account is shown if someone signs in
+ *    on the same tab.
+ *
+ * A 401 from `['auth', 'me']` itself is skipped: that query already turns it into `null`.
+ */
+const endSessionOn401 = (error: unknown, queryKey?: readonly unknown[]) => {
+  if (!(error instanceof ApiError) || error.status !== 401) return
+  if (queryKey?.[0] === 'auth') return
+  queryClient.setQueryData(['auth', 'me'], null)
+  queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== 'auth' })
+}
+
+export const queryClient: QueryClient = new QueryClient({
+  queryCache: new QueryCache({ onError: (error, query) => endSessionOn401(error, query.queryKey) }),
   // Every mutation reports its own failure, so no action can fail in silence.
   //
   // Before this, 19 of the 20 files with mutations had no onError: dismissing a
@@ -30,6 +50,7 @@ export const queryClient = new QueryClient({
   // reported twice.
   mutationCache: new MutationCache({
     onError: (error, _variables, _context, mutation) => {
+      endSessionOn401(error)
       if (mutation.options.meta?.errorToast === false) return
       publishToast({ message: errorMessage(error), tone: 'error' })
     },

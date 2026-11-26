@@ -62,6 +62,10 @@ public class EventService {
             throw new ValidationException("The event has to end after it starts.");
         }
 
+        if (blankToNull(request.getLocation()) == null && blankToNull(request.getVirtualLink()) == null) {
+            throw new ValidationException("Say where it happens: add a location, a link, or both.");
+        }
+
         Event saved = events.save(Event.builder()
                 .hostUser(host)
                 .title(request.getTitle().trim())

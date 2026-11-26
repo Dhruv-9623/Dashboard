@@ -166,8 +166,10 @@ export const InvestmentsPage = () => {
         <div className="mb-4 grid gap-3 sm:grid-cols-3">
           <MetricCard
             label="Capital deployed"
-            value={formatCurrencyTotals(totals.totalsByCurrency)}
-            hint="Every position on record"
+            // Active positions only, so this agrees with the Dashboard and Insights headlines. Exited and
+            // written-off cheques stay in the list below but are not capital at work.
+            value={formatCurrencyTotals(totals.activeTotalsByCurrency)}
+            hint="Positions still held"
             accent="var(--viz-1)"
           />
           <MetricCard

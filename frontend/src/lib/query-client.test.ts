@@ -95,3 +95,34 @@ describe('query retry policy', () => {
     expect(retryUnlessClientError(1, new TypeError('Failed to fetch'))).toBe(false)
   })
 })
+
+describe('session ending while a page is open', () => {
+  const expired = () => new ApiError('UNAUTHORIZED', 'Full authentication is required', 401)
+
+  it('marks the user signed out and drops other cached data when a page request gets a 401', async () => {
+    queryClient.setQueryData(['auth', 'me'], { id: 'u-1' })
+    queryClient.setQueryData(['investments'], ['stale'])
+
+    await queryClient.fetchQuery({ queryKey: ['insights'], queryFn: () => Promise.reject(expired()), retry: false }).catch(() => {})
+
+    // null is what sends ProtectedRoute to the sign-in page; without it the screen stays on skeletons.
+    expect(queryClient.getQueryData(['auth', 'me'])).toBeNull()
+    expect(queryClient.getQueryData(['investments'])).toBeUndefined()
+  })
+
+  it('does the same when an action gets a 401', async () => {
+    queryClient.setQueryData(['auth', 'me'], { id: 'u-1' })
+
+    await run({ meta: { errorToast: false }, mutationFn: () => Promise.reject(expired()) })
+
+    expect(queryClient.getQueryData(['auth', 'me'])).toBeNull()
+  })
+
+  it("leaves the user alone when the 401 is the sign-in check's own answer", async () => {
+    queryClient.setQueryData(['auth', 'me'], { id: 'u-1' })
+
+    await queryClient.fetchQuery({ queryKey: ['auth', 'me'], queryFn: () => Promise.reject(expired()), retry: false }).catch(() => {})
+
+    expect(queryClient.getQueryData(['auth', 'me'])).toEqual({ id: 'u-1' })
+  })
+})

@@ -188,7 +188,7 @@ export const InsightsPage = () => {
         aside={
           <Link
             to={`/rounds/${chartedRound.id}`}
-            className="text-xs text-ink-muted hover:text-brand-ink hover:underline"
+            className="link-target inline-block text-xs text-ink-muted hover:text-brand-ink hover:underline"
           >
             Round detail
           </Link>

@@ -66,7 +66,7 @@ class EventServiceTest {
 
     private static CreateEventRequest request(Instant start, Instant end) {
         return CreateEventRequest.builder().title("  Founder office hours ").eventType(EventType.OFFICE_HOURS)
-                .startTime(start).endTime(end).isPublic(true).build();
+                .startTime(start).endTime(end).location("Bengaluru").isPublic(true).build();
     }
 
     @Test
@@ -198,5 +198,15 @@ class EventServiceTest {
 
         assertThatThrownBy(() -> service.delete(guest, event.getId())).isInstanceOf(EntityNotFoundException.class);
         verify(events, never()).delete(any());
+    }
+
+    @Test
+    void an_event_with_neither_a_location_nor_a_link_is_refused() {
+        CreateEventRequest noWhere = CreateEventRequest.builder().title("Ghost event").eventType(EventType.NETWORKING)
+                .startTime(NOW.plusSeconds(3600)).location("  ").virtualLink("").build();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.create(host, noWhere))
+                .isInstanceOf(com.VentureCapitals.Dashboard.common.exception.ValidationException.class)
+                .hasMessageContaining("where it happens");
     }
 }

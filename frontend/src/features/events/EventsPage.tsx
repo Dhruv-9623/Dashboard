@@ -65,7 +65,8 @@ const CreateEventModal = ({ onClose }: { onClose: () => void }) => {
   const set = (key: keyof typeof form, value: string | boolean) =>
     setForm((prev) => ({ ...prev, [key]: value }))
 
-  const ready = form.title.trim() && form.startTime
+  // Where it happens is required: a location, a link, or both. The server enforces the same rule.
+  const ready = form.title.trim() && form.startTime && (form.location.trim() || form.virtualLink.trim())
 
   return (
     <Modal
@@ -146,7 +147,7 @@ const CreateEventModal = ({ onClose }: { onClose: () => void }) => {
               id="event-location"
               value={form.location}
               onChange={(event) => set('location', event.target.value)}
-              placeholder="Bengaluru, or leave blank"
+              placeholder="Bengaluru — a location or a link is required"
             />
           </div>
           <div>

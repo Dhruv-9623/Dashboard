@@ -20,6 +20,16 @@ public interface InvestmentRepository extends JpaRepository<Investment, UUID> {
     @EntityGraph(attributePaths = {"startup"}, type = EntityGraph.EntityGraphType.LOAD)
     Page<Investment> findByVcFirmId(UUID vcFirmId, Pageable pageable);
 
+    boolean existsByVcFirmIdAndStartupIdAndInvestmentDateAndAmountAndCurrencyAndRound(
+            UUID vcFirmId, UUID startupId, java.time.LocalDate investmentDate, Long amount, String currency,
+            InvestmentRound round);
+
+    /** Per-firm lock held to the end of the transaction, so two identical submissions take turns. */
+    @org.springframework.data.jpa.repository.Query(
+            value = "select 1 from (select pg_advisory_xact_lock(hashtextextended(cast(:key as text), 0))) l",
+            nativeQuery = true)
+    int lockFirm(@Param("key") String key);
+
     @EntityGraph(attributePaths = {"startup"}, type = EntityGraph.EntityGraphType.LOAD)
     Page<Investment> findByVcFirmIdAndStatus(UUID vcFirmId, InvestmentStatus status, Pageable pageable);
 

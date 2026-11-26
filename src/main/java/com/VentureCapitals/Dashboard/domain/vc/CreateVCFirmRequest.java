@@ -1,6 +1,5 @@
 package com.VentureCapitals.Dashboard.domain.vc;
 
-import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -43,6 +42,6 @@ public class CreateVCFirmRequest {
     private String location;
 
     @Min(value = 1900, message = "Founded year looks too early")
-    @Max(value = 2100, message = "Founded year looks too late")
+    @com.VentureCapitals.Dashboard.common.validation.NotFutureYear(message = "Founded year can't be in the future")
     private Integer foundedYear;
 }

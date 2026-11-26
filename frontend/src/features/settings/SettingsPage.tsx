@@ -644,12 +644,11 @@ const PlanTab = () => {
         </Alert>
       )}
 
-      {!plansAvailable && (
-        <Alert variant="info" className="mb-5" title="Plans aren't live yet">
-          Every firm has full access while billing is being built. We'll show your plan here once
-          it's switched on.
-        </Alert>
-      )}
+      <Alert variant="info" className="mb-5" title="Billing isn't live yet">
+        {plansAvailable
+          ? 'No payment is taken, so switching plans only changes how many teammates you can add.'
+          : "Every firm has full access while billing is being built. We'll show your plan here once it's switched on."}
+      </Alert>
 
       <div className="grid gap-4 md:grid-cols-3">
         {PLANS.map((plan) => {
